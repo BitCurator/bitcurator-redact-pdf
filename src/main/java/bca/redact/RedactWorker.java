@@ -1,9 +1,12 @@
+package bca.redact;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.regex.Pattern;
 
 import javax.swing.SwingWorker;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.itextpdf.kernel.colors.DeviceGray;
 import com.itextpdf.kernel.pdf.PdfDocument;
@@ -11,26 +14,33 @@ import com.itextpdf.kernel.pdf.PdfPage;
 import com.itextpdf.kernel.pdf.canvas.parser.PdfCanvasProcessor;
 import com.itextpdf.kernel.pdf.canvas.parser.listener.IPdfTextLocation;
 import com.itextpdf.kernel.pdf.canvas.parser.listener.RegexBasedLocationExtractionStrategy;
+import com.itextpdf.layout.Document;
 import com.itextpdf.pdfcleanup.PdfCleanUpLocation;
 
-public class RedactWorker extends SwingWorker<List<RedactLocation>, RedactLocation> {
-	PdfDocument pdfDoc = null;
-	Collection<String> entities = null;
+import bca.redact.RedactionApp.Entity;
 
-	public RedactWorker(PdfDocument pdfDoc, Collection<String> entities) {
+public class RedactWorker extends SwingWorker<List<RedactLocation>, RedactLocation> {
+	Logger log = LoggerFactory.getLogger(RedactWorker.class);
+	PdfDocument pdfDoc = null;
+	List<Entity> entities = null;
+
+	public RedactWorker(PdfDocument pdfDoc, List<Entity> entities2) {
 		this.pdfDoc = pdfDoc;
-		this.entities = entities;
+		Document doc = new Document(pdfDoc);
+		log.info("Margins (t,b,l,r) ({},{},{},{})",doc.getTopMargin(), doc.getBottomMargin(), doc.getLeftMargin(), doc.getRightMargin());
+		this.entities = entities2;
 	}
 
 	@Override
 	protected List<RedactLocation> doInBackground() throws Exception {
-		List<RedactLocation> cleanUps = new ArrayList<RedactLocation>();
+		log.info("Starting redaction scan..");
+		List<RedactLocation> locations = new ArrayList<RedactLocation>();
 		int pages = pdfDoc.getNumberOfPages();
-		for (int i = 1; i < pages; i++) {
+		for (int i = 1; i <= pages; i++) {
 			PdfPage page = pdfDoc.getPage(i /* FIXME */);
-			List<RedactLocation> pagechunk = new ArrayList<RedactLocation>();
-			for (String entity : entities) {
-				String entityRegex = Pattern.quote(entity);
+			for (Entity entity : entities) {
+				log.info("Working on entity: {}", entity.text);
+				String entityRegex = Pattern.quote(entity.text);
 				RegexBasedLocationExtractionStrategy extractionStrategy = new RegexBasedLocationExtractionStrategy(
 						entityRegex);
 				new PdfCanvasProcessor(extractionStrategy).processPageContent(page);
@@ -40,13 +50,12 @@ public class RedactWorker extends SwingWorker<List<RedactLocation>, RedactLocati
 					myloc.entity = entity;
 					myloc.page = i;
 					myloc.loc = loc;
-					cleanUps.add(myloc);
-					pagechunk.add(myloc);
+					publish(myloc);
+					locations.add(myloc);
 				}
 			}
-			publish(pagechunk.toArray(new RedactLocation[pagechunk.size()-1]));
 		}
-		return cleanUps;
+		return locations;
 	}
 
 }

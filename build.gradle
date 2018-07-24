@@ -28,6 +28,7 @@ dependencies {
     compile 'com.itextpdf:cleanup:2.0.1@jar'
     compile 'org.apache.commons:commons-imaging:1.0-SNAPSHOT@jar'
     compile 'commons-io:commons-io:2.6@jar'
+    compile 'org.apache.commons:commons-collections4:4.2@jar'
     compile 'org.ghost4j:ghost4j:1.0.0@jar'
     compile 'com.lowagie:itext:2.1.7@jar'
     compile 'log4j:log4j:1.2.15@jar'

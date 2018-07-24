@@ -1,34 +1,51 @@
 package bca.redact;
 
 import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.EventQueue;
+import java.awt.Point;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
+import java.util.SortedMap;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
 
+import javax.swing.DefaultCellEditor;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
+import javax.swing.JComboBox;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
 import javax.swing.JSeparator;
 import javax.swing.JSplitPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JToolBar;
+import javax.swing.ListSelectionModel;
+import javax.swing.ScrollPaneConstants;
 import javax.swing.SwingConstants;
 import javax.swing.SwingWorker;
 import javax.swing.SwingWorker.StateValue;
@@ -37,36 +54,66 @@ import javax.swing.border.BevelBorder;
 import javax.swing.border.EmptyBorder;
 import javax.swing.filechooser.FileFilter;
 import javax.swing.table.AbstractTableModel;
+import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.TableColumn;
 
+import org.apache.commons.collections4.MultiValuedMap;
+import org.apache.commons.collections4.list.SetUniqueList;
+import org.apache.commons.collections4.multimap.HashSetValuedHashMap;
 import org.apache.log4j.Logger;
+import org.docopt.Docopt;
 
 public class RedactionApp {
 	private static final Logger log = Logger.getLogger(RedactionApp.class);
 	private static final File[] EMPTY_FILE_ARRAY = new File[] {};
-
+	protected static final Color ANALYZED_BG_COLOR = Color.lightGray;
+	private Action defaultAction = Action.Ignore;
+	
 	private JFrame frmBitcuratorPdfRedact;
 	private final JToolBar toolBar = new JToolBar();
 	private JTable table_entities;
-	private JTable table_pdfs;
-	private JTable table_1;
+	private JTable table_patterns;
 	private JFileChooser fileChooser_pdfs;
 
 	private List<File> pdfFiles = new ArrayList<>();
-	private Set<File> analyzed = new HashSet<File>();
-	private List<String> entities = new ArrayList<>();
-	private Map<String, Action> entityAction = new HashMap<String, Action>();
-	private Action defaultAction = Action.AskMe;
+	private Map<File, PDFAnalysis> file_analyses = new HashMap<>();
+	private MultiValuedMap<String, File> entity_files = new HashSetValuedHashMap<>();
+	private Map<String, Entity> entities = new HashMap<String, Entity>();
+	private List<String> entityOrder = new ArrayList<String>();
+	private List<Object[]> patterns = new ArrayList<>();
+	
+	Object file_columnNames[] = { "Filename", "Path", "Redacted File" };
+	Object pattern_columnNames[] = { "Name", "Regular Expression", "Policy", "Notes" };
+	Object entity_columnNames[] = { "Entity Text", "Type", "Count", "Policy", "Notes" };
 
+	class Entity {
+		public Entity(String text, String type) {
+			this.text = text;
+			this.type = type;
+			this.policy = defaultAction;
+			this.count = 1;
+			this.notes = "";
+		}
+		public String text;
+		public String type;
+		public Action policy;
+		public String notes;
+		public int count;
+		public void incr() {
+			this.count++;
+		}
+	}
+	
+	
 	enum Action {
-		Redact, Ignore, AskMe
+		Redact, Ignore, Ask
 	}
 
 	AbstractTableModel tableModel_pdfs = new AbstractTableModel() {
 		private static final long serialVersionUID = 1L;
-		Object columnNames[] = { "File", "Redacted Location" };
 
 		public String getColumnName(int column) {
-			return columnNames[column].toString();
+			return file_columnNames[column].toString();
 		}
 
 		public int getRowCount() {
@@ -74,27 +121,58 @@ public class RedactionApp {
 		}
 
 		public int getColumnCount() {
-			return columnNames.length;
+			return file_columnNames.length;
 		}
 
 		public Object getValueAt(int row, int col) {
 			switch (col) {
 			case 0:
-				return pdfFiles.get(row).getAbsolutePath();
+				return pdfFiles.get(row).getName();
 			case 1:
-				return "TODO: output paths";
+				return pdfFiles.get(row).getParentFile().getPath();
 			default:
 				return "n/a";
 			}
 		}
 	};
 
-	AbstractTableModel tableModel_entities = new AbstractTableModel() {
+	AbstractTableModel tableModel_patterns = new AbstractTableModel() {
 		private static final long serialVersionUID = 1L;
-		Object columnNames[] = { "Entity", "Action" };
 
 		public String getColumnName(int column) {
-			return columnNames[column].toString();
+			return pattern_columnNames[column].toString();
+		}
+
+		public int getRowCount() {
+			return patterns.size();
+		}
+
+		public int getColumnCount() {
+			return pattern_columnNames.length;
+		}
+		
+        public boolean isCellEditable(int row, int col) {
+            return true;
+        }
+
+		@Override
+		public void setValueAt(Object value, int row, int col) {
+			Object[] pattern = patterns.get(row);
+			pattern[col] = value;
+		}
+
+		public Object getValueAt(int row, int col) {
+			Object[] pattern = patterns.get(row);
+			return pattern[col];
+		}
+	};
+	
+	
+	AbstractTableModel tableModel_entities = new AbstractTableModel() {
+		private static final long serialVersionUID = 1L;
+
+		public String getColumnName(int column) {
+			return entity_columnNames[column].toString();
 		}
 
 		public int getRowCount() {
@@ -102,40 +180,87 @@ public class RedactionApp {
 		}
 
 		public int getColumnCount() {
-			return columnNames.length;
+			return entity_columnNames.length;
+		}
+		
+        public boolean isCellEditable(int row, int col) {
+            return col == 3 || col == 4;
+        }
+
+		@Override
+		public void setValueAt(Object value, int row, int col) {
+			String name = entityOrder.get(row);
+			Entity e = entities.get(name);
+			switch(col) {
+			case 0:
+				e.text = (String)value;
+				return;
+			case 1:
+				e.type = (String)value;
+				return;
+			case 3:
+				e.policy = (Action)value;
+				return;
+			case 4:
+				e.notes = (String)value;
+				return;
+			}
 		}
 
 		public Object getValueAt(int row, int col) {
-			String s = entities.get(row);
-			switch (col) {
+			String name = entityOrder.get(row);
+			Entity e = entities.get(name);
+			switch(col) {
 			case 0:
-				return s;
+				return e.text;
 			case 1:
-				if (entityAction.containsKey(s)) {
-					return entityAction.get(s).name();
-				} else {
-					return defaultAction.name();
-				}
-			default:
-				return "n/a";
+				return e.type;
+			case 2:
+				return e.count;
+			case 3:
+				return e.policy;
+			case 4:
+				return e.notes;
 			}
+			return "?";
 		}
 	};
+	private JTable table;
+	private String outPath;
+	private RedactDialog redactDialog;
 
 	/**
 	 * Launch the application.
 	 */
 	public static void main(String[] args) {
+		InputStream doc = RedactionApp.class.getClassLoader().getResourceAsStream("docopt.txt");
+		final Map<String, Object> opts = new Docopt(doc).withVersion("BitCurator PDF Redactor 0.1.0").parse(args);
+
+		// Validate output path.
+		String outPathArg = (String) opts.get("--output-dir");
+		final String outPathAbsolute = Paths.get(outPathArg).toFile().getAbsolutePath();
+
+		// Build the list of PDFs
+		List<Object> infiles = (List<Object>)opts.get("FILE");
+		File[] files = infiles.stream()
+				.map(a -> new File((String) a))
+				.collect(Collectors.toCollection(ArrayList::new)).toArray(EMPTY_FILE_ARRAY);
 		EventQueue.invokeLater(new Runnable() {
 			public void run() {
 				try {
 					RedactionApp window = new RedactionApp();
+					window.setOutPath(outPathAbsolute);
 					window.frmBitcuratorPdfRedact.setVisible(true);
+					window.addPDFPaths(files);
 				} catch (Exception e) {
 					e.printStackTrace();
 				}
 			}
 		});
+	}
+
+	protected void setOutPath(String outPath) {
+		this.outPath = outPath;
 	}
 
 	/**
@@ -149,6 +274,7 @@ public class RedactionApp {
 	 * Initialize the contents of the frame.
 	 */
 	private void initialize() {
+		loadPattens();
 		frmBitcuratorPdfRedact = new JFrame();
 		frmBitcuratorPdfRedact.setTitle("BitCurator PDF Redact");
 		frmBitcuratorPdfRedact.setBounds(50, 50, 800, 600);
@@ -190,7 +316,7 @@ public class RedactionApp {
 
 		JPanel panel_Entities = new JPanel();
 		panel_Entities.setBorder(new EmptyBorder(10, 10, 10, 10));
-		tabbedPane_1.addTab("Found Entities", null, panel_Entities, null);
+		tabbedPane_1.addTab("Named Entities", null, panel_Entities, null);
 		panel_Entities.setLayout(new BorderLayout(0, 0));
 
 		JTextArea txtrThisToolUses = new JTextArea();
@@ -199,15 +325,25 @@ public class RedactionApp {
 		txtrThisToolUses.setWrapStyleWord(true);
 		txtrThisToolUses.setLineWrap(true);
 		txtrThisToolUses
-				.setText("Named entities are people, places, and organizations detected in the text of PDF files.");
+				.setText("Named entities are people, places, and organizations detected in the text of PDF files you have added.");
 		panel_Entities.add(txtrThisToolUses, BorderLayout.NORTH);
 
+		//Set up the editor for the sport cells.
+        JComboBox<Action> patternAction_comboBox = new JComboBox<>();
+        patternAction_comboBox.addItem(Action.Ignore);
+        patternAction_comboBox.addItem(Action.Ask);
+        patternAction_comboBox.addItem(Action.Redact);
+		
 		table_entities = new JTable();
 		table_entities.setModel(tableModel_entities);
+		TableColumn policyColumn = table_entities.getColumn(entity_columnNames[2]);
+		policyColumn.setCellEditor(new DefaultCellEditor(patternAction_comboBox));
 		table_entities.setFillsViewportHeight(true);
 		table_entities.setBorder(new BevelBorder(BevelBorder.LOWERED, null, null, null, null));
 		table_entities.setPreferredSize(new Dimension(400, 300));
-		panel_Entities.add(table_entities, BorderLayout.CENTER);
+		JScrollPane entities_scrollPane = new JScrollPane(table_entities);
+		entities_scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
+		panel_Entities.add(entities_scrollPane, BorderLayout.CENTER);
 
 		JPanel panel_Patterns = new JPanel();
 		panel_Patterns.setBorder(new EmptyBorder(10, 10, 10, 10));
@@ -223,20 +359,69 @@ public class RedactionApp {
 		textArea.setBackground(UIManager.getColor("Button.background"));
 		panel_Patterns.add(textArea, BorderLayout.NORTH);
 
-		table_1 = new JTable();
-		table_1.setPreferredSize(new Dimension(400, 300));
-		table_1.setBorder(new BevelBorder(BevelBorder.LOWERED, null, null, null, null));
-		panel_Patterns.add(table_1, BorderLayout.CENTER);
+		table_patterns = new JTable();
+		table_patterns.setFillsViewportHeight(true);
+		table_patterns.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+		table_patterns.setPreferredSize(new Dimension(400, 300));
+		table_patterns.setBorder(new BevelBorder(BevelBorder.LOWERED, null, null, null, null));
+		table_patterns.setModel(tableModel_patterns);
+		TableColumn patternPolicyColumn = table_patterns.getColumn(pattern_columnNames[2]);
+		patternPolicyColumn.setCellEditor(new DefaultCellEditor(patternAction_comboBox));
+		JScrollPane patterns_scrollPane = new JScrollPane(table_patterns);
+		patterns_scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
+		panel_Patterns.add(patterns_scrollPane, BorderLayout.CENTER);
 
 		JPanel panel_Files = new JPanel();
 		panel_Files.setMinimumSize(minimumSize);
 		splitPane.setLeftComponent(panel_Files);
 		panel_Files.setLayout(new BorderLayout(0, 0));
-
-		table_pdfs = new JTable();
-		table_pdfs.setBorder(new BevelBorder(BevelBorder.LOWERED, null, null, null, null));
-		table_pdfs.setModel(tableModel_pdfs);
-		panel_Files.add(table_pdfs);
+				
+		table = new JTable();
+		table.setFillsViewportHeight(true);
+		table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+		table.setPreferredSize(new Dimension(400, 300));
+		table.setBorder(new BevelBorder(BevelBorder.LOWERED, null, null, null, null));
+		table.setModel(tableModel_pdfs);
+		table.getColumn(file_columnNames[0]).setCellRenderer(
+	            new DefaultTableCellRenderer() {
+	               @Override
+	               public Component getTableCellRendererComponent(JTable table,
+	                     Object value, boolean isSelected, boolean hasFocus,
+	                     int row, int column) {
+	                  JLabel superRenderer = (JLabel)super.getTableCellRendererComponent(table, 
+	                        value, isSelected, hasFocus, row, column);
+	                  Color backgroundColor = getBackground();
+	                  if(file_analyses.containsKey(pdfFiles.get(row))) {
+	                	  PDFAnalysis a = file_analyses.get(pdfFiles.get(row));
+	                	  if(a.error != null) {
+	                		  superRenderer.setForeground(Color.red);
+	                		  if(a.error.getCause() != null) {
+	                			  superRenderer.setToolTipText(a.error.getCause().getMessage());
+	                		  }
+	                	  } else {
+	                		  superRenderer.setForeground(Color.black);
+	                		  superRenderer.setToolTipText(a.entities.length + " named entities");
+	                	  }
+	                  } else {
+	                     superRenderer.setForeground(Color.gray);
+	                     superRenderer.setToolTipText("not analyzed");
+	                  }
+	                  return superRenderer;
+	               }
+	            });
+		table.addMouseListener(new MouseAdapter() {
+		    public void mousePressed(MouseEvent mouseEvent) {
+		        if (mouseEvent.getClickCount() == 2) {
+		        	int row = table.rowAtPoint(mouseEvent.getPoint());
+		        	if(table.getSelectedRow() != -1) {
+		        		redact(pdfFiles.get(row));
+		            }
+		        }
+		    }
+		});
+		JScrollPane scrollPane = new JScrollPane(table);
+		scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
+		panel_Files.add(scrollPane, BorderLayout.CENTER);
 
 		JLabel lblStatus = new JLabel("output folder: none");
 		frmBitcuratorPdfRedact.getContentPane().add(lblStatus, BorderLayout.SOUTH);
@@ -266,12 +451,19 @@ public class RedactionApp {
 			}
 
 		});
+		this.redactDialog = new RedactDialog();
+	}
+
+	private void loadPattens() {
+		// name, regular expression, policy, notes
+		patterns.add(new Object[] {"Social Security Number", "\\d{3}-\\d{2}-\\d{4}", Action.Redact, ""});
 	}
 
 	private void addPDFPaths(final File[] pdfPaths) throws Error {
 		SwingWorker<List<File>, File> sw = new SwingWorker<List<File>, File>() {
 			@Override
 			protected void process(List<File> chunks) {
+				Collections.sort(pdfFiles);
 				tableModel_pdfs.fireTableDataChanged();
 			}
 
@@ -323,8 +515,6 @@ public class RedactionApp {
 				case "state":
 					switch ((StateValue) event.getNewValue()) {
 					case DONE:
-						System.out.println("HERE SYSTEM");
-						log.info("HERE");
 						startEntityAnalysisWorker();
 					}
 				}
@@ -335,27 +525,54 @@ public class RedactionApp {
 
 	private void startEntityAnalysisWorker() {
 		log.info("starting analysis");
-		PDFAnalysisWorker pdfAnalysisWorker = new PDFAnalysisWorker(pdfFiles.toArray(EMPTY_FILE_ARRAY));
-		pdfAnalysisWorker.addPropertyChangeListener(new PropertyChangeListener() {
+		PDFAnalysisWorker pdfAnalysisWorker = new PDFAnalysisWorker(pdfFiles.toArray(EMPTY_FILE_ARRAY)) {
+
 			@Override
-			public void propertyChange(PropertyChangeEvent evt) {
-				StateValue s = (StateValue) evt.getNewValue();
-				log.info("state: "+ s.name());
-				if (s == StateValue.DONE) {
-					try {
-						Set<String> result = pdfAnalysisWorker.get();
-						result.removeAll(entities);
-						entities.addAll(result);
-						Collections.sort(entities);
-						tableModel_entities.fireTableDataChanged();
-					} catch (InterruptedException e) {
-						throw new Error(e);
-					} catch (ExecutionException e) {
-						throw new Error(e);
+			protected void process(List<PDFAnalysis> chunks) {
+				for(PDFAnalysis a : chunks) {
+					if(a.entities != null) {
+						Arrays.stream(a.entities)
+							.forEach( x -> {
+								if(!entities.containsKey(x[0])) {
+									entities.put(x[0], new Entity(x[0], x[1]));
+								} else {
+									entities.get(x[0]).incr();
+								}
+							});
+						Arrays.stream(a.entities).forEach( x -> {
+							entity_files.put(x[0], a.file);
+						});
 					}
+					file_analyses.put(a.file, a);
 				}
+				entityOrder.clear();
+				entityOrder.addAll(entities.keySet());
+				Collections.sort(entityOrder);
+				tableModel_entities.fireTableDataChanged();
+				table.repaint();
+			}
+			
+		};
+		pdfAnalysisWorker.execute();
+	}
+	
+	private void redact(File file) {
+		// TODO Alert if redacted file already exists..
+		List<Entity> fileEntities = new ArrayList<>();
+		entity_files.entries().parallelStream().forEach( x -> {
+			if(file.equals(x.getValue())) {
+				fileEntities.add(entities.get(x.getKey()));
 			}
 		});
-		pdfAnalysisWorker.execute();
+		File outFile = Paths.get(outPath, file.getAbsolutePath()).toFile();
+		Collections.sort(fileEntities, Comparator.comparing(x -> { return ((Entity)x).text;})); 
+		try {
+			this.redactDialog.startDoc(file, outFile, fileEntities);
+			this.redactDialog.setVisible(true);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
 	}
 }

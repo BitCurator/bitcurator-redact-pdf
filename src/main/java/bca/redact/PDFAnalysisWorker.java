@@ -1,7 +1,9 @@
 package bca.redact;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 
@@ -18,10 +20,10 @@ import edu.stanford.nlp.pipeline.CoreDocument;
 import edu.stanford.nlp.pipeline.CoreEntityMention;
 import edu.stanford.nlp.pipeline.StanfordCoreNLP;
 
-public class PDFAnalysisWorker extends SwingWorker<Set<String>, String> {
+public class PDFAnalysisWorker extends SwingWorker<Set<PDFAnalysis>, PDFAnalysis> {
 	private static final Logger log = Logger.getLogger(PDFAnalysisWorker.class);
 	private static Properties props = new Properties();
-	String[] empty = new String[] {};
+	private static final String[][] empty = new String[][] {};
 	File[] pdfs;
 	StanfordCoreNLP pipeline;
 	
@@ -49,19 +51,16 @@ public class PDFAnalysisWorker extends SwingWorker<Set<String>, String> {
 	}
 
 	@Override
-	protected Set<String> doInBackground() {
-		log.info("Processing PDFs: " + this.pdfs.length);
-		Set<String> entities = new HashSet<>();
+	protected Set<PDFAnalysis> doInBackground() {
+		Set<PDFAnalysis> analyses = new HashSet<>();
 		if (pipeline == null) {
 			pipeline = new StanfordCoreNLP(props);
-			log.info("loaded SNLP pipeline");
 		}
 		int errors = 0;
 		int successes = 0;
 		fileloop: for (File f : pdfs) {
 			PdfDocument pdfDoc = null;
 			try {
-				log.info("analyzing: " + f.getAbsolutePath());
 				try {
 					pdfDoc = new PdfDocument(new PdfReader(f.getAbsolutePath()));
 				} catch (Throwable e) {
@@ -80,37 +79,30 @@ public class PDFAnalysisWorker extends SwingWorker<Set<String>, String> {
 				}
 				String str = strategy.getResultantText();
 				CoreDocument doc = new CoreDocument(str);
-				log.info("created CoreDocument");
 				try {
 					pipeline.annotate(doc);
 				} catch (Throwable e) {
 					throw new AnalysisException(f, e);
 				}
-				log.info("annotated document");
-				Set<String> docEntities = new HashSet<String>();
+				List<String[]> pdfentities = new ArrayList<>();
 				for (CoreEntityMention cem : doc.entityMentions()) {
-					String text = cem.text();
-					String entity = cem.entity();
-					docEntities.add(text);
-					// log.info("got entity: " + entity + " text: "+ text);
+					pdfentities.add(new String[] {cem.text(), cem.entityType()});
 				}
-				log.info("finished gathering tags for: " + f.getName());
-				publish(docEntities.toArray(empty));
-				log.info("new entities: " + String.join(", ", docEntities));
-				entities.addAll(docEntities);
-				successes++;
+				PDFAnalysis analysis = new PDFAnalysis(f, pdfentities.toArray(empty));
+				analyses.add(analysis);
+				publish(analysis);
 			} catch (AnalysisException e) {
-				log.error("ANALYSIS ERROR: " + e.cause.getLocalizedMessage());
-				errors++;
+				PDFAnalysis analysis = new PDFAnalysis(f, e);
+				analyses.add(analysis);
+				publish(analysis);
 			} finally {
 				if(pdfDoc != null) {
 					pdfDoc.close();
 				}
 			}
 		}
-		log.error("There were errors: "+errors);
-		log.info("There were successes: "+successes);
-		return entities;
+		log.error("There were PDF Entity Analysis errors: "+errors);
+		return analyses;
 	}
 
 }

@@ -1,13 +1,13 @@
 BitCurator PDF Redaction
 
 Usage:
+  pdf-redactor [options]
+  pdf-redactor [options] FILE ...
   pdf-redactor [options] <entity-file> FILE ...
   pdf-redactor -h | --help
   pdf-redactor --version
 
 Options:
   --output-dir=<dir>  Redacted PDFs will be written here. [default: output]			
-  -O                  Overwrite files in the out-path without warning.
-  -q --quiet          Suppress prompts by accepting all matching entity redactions.
   -h --help           Show this screen.
   --version	          Show the software version.
