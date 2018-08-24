@@ -1,7 +1,6 @@
 package bca.redact;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Pattern;
 
 import javax.swing.SwingWorker;
 
@@ -14,21 +13,16 @@ import com.itextpdf.kernel.pdf.PdfPage;
 import com.itextpdf.kernel.pdf.canvas.parser.PdfCanvasProcessor;
 import com.itextpdf.kernel.pdf.canvas.parser.listener.IPdfTextLocation;
 import com.itextpdf.kernel.pdf.canvas.parser.listener.RegexBasedLocationExtractionStrategy;
-import com.itextpdf.layout.Document;
 import com.itextpdf.pdfcleanup.PdfCleanUpLocation;
 
-import bca.redact.RedactionApp.Entity;
-
-public class RedactWorker extends SwingWorker<List<RedactLocation>, RedactLocation> {
-	Logger log = LoggerFactory.getLogger(RedactWorker.class);
+public class PatternFindingWorker extends SwingWorker<List<RedactLocation>, RedactLocation> {
+	Logger log = LoggerFactory.getLogger(PatternFindingWorker.class);
 	PdfDocument pdfDoc = null;
-	List<Entity> entities = null;
+	List<TextPattern> patterns = null;
 
-	public RedactWorker(PdfDocument pdfDoc, List<Entity> entities2) {
+	public PatternFindingWorker(PdfDocument pdfDoc, List<TextPattern> patterns) {
 		this.pdfDoc = pdfDoc;
-		Document doc = new Document(pdfDoc);
-		log.info("Margins (t,b,l,r) ({},{},{},{})",doc.getTopMargin(), doc.getBottomMargin(), doc.getLeftMargin(), doc.getRightMargin());
-		this.entities = entities2;
+		this.patterns = patterns;
 	}
 
 	@Override
@@ -38,18 +32,19 @@ public class RedactWorker extends SwingWorker<List<RedactLocation>, RedactLocati
 		int pages = pdfDoc.getNumberOfPages();
 		for (int i = 1; i <= pages; i++) {
 			PdfPage page = pdfDoc.getPage(i /* FIXME */);
-			for (Entity entity : entities) {
-				log.info("Working on entity: {}", entity.text);
-				String entityRegex = Pattern.quote(entity.text);
+			for (TextPattern pattern : patterns) {
+				log.info("Working on entity: {}", pattern.getRegex());
+				String entityRegex = pattern.getRegex();
 				RegexBasedLocationExtractionStrategy extractionStrategy = new RegexBasedLocationExtractionStrategy(
 						entityRegex);
 				new PdfCanvasProcessor(extractionStrategy).processPageContent(page);
 				for (IPdfTextLocation location : extractionStrategy.getResultantLocations()) {
 					PdfCleanUpLocation loc = new PdfCleanUpLocation(i, location.getRectangle(), DeviceGray.BLACK);
 					RedactLocation myloc = new RedactLocation();
-					myloc.entity = entity;
+					myloc.pattern = pattern;
 					myloc.page = i;
 					myloc.loc = loc;
+					myloc.action = pattern.policy;
 					publish(myloc);
 					locations.add(myloc);
 				}

@@ -5,9 +5,7 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.EventQueue;
-import java.awt.Point;
 import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.beans.PropertyChangeEvent;
@@ -21,22 +19,23 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.SortedMap;
-import java.util.TreeMap;
 import java.util.stream.Collectors;
 
+import javax.swing.AbstractAction;
 import javax.swing.DefaultCellEditor;
 import javax.swing.JButton;
-import javax.swing.JCheckBox;
+import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JComboBox;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JMenu;
+import javax.swing.JMenuBar;
+import javax.swing.JMenuItem;
 import javax.swing.JPanel;
+import javax.swing.JRadioButtonMenuItem;
 import javax.swing.JScrollPane;
 import javax.swing.JSeparator;
 import javax.swing.JSplitPane;
@@ -58,7 +57,6 @@ import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableColumn;
 
 import org.apache.commons.collections4.MultiValuedMap;
-import org.apache.commons.collections4.list.SetUniqueList;
 import org.apache.commons.collections4.multimap.HashSetValuedHashMap;
 import org.apache.log4j.Logger;
 import org.docopt.Docopt;
@@ -72,42 +70,18 @@ public class RedactionApp {
 	private JFrame frmBitcuratorPdfRedact;
 	private final JToolBar toolBar = new JToolBar();
 	private JTable table_entities;
-	private JTable table_patterns;
+	private JTable table_expressions;
 	private JFileChooser fileChooser_pdfs;
 
 	private List<File> pdfFiles = new ArrayList<>();
 	private Map<File, PDFAnalysis> file_analyses = new HashMap<>();
-	private MultiValuedMap<String, File> entity_files = new HashSetValuedHashMap<>();
-	private Map<String, Entity> entities = new HashMap<String, Entity>();
+	private MultiValuedMap<String, File> pattern_files = new HashSetValuedHashMap<>();
+	private Map<String, EntityPattern> entities = new HashMap<String, EntityPattern>();
 	private List<String> entityOrder = new ArrayList<String>();
-	private List<Object[]> patterns = new ArrayList<>();
+	private Map<String, ExpressionPattern> expressions = new HashMap<>();
+	private List<String> expressionOrder = new ArrayList<String>();
 	
 	Object file_columnNames[] = { "Filename", "Path", "Redacted File" };
-	Object pattern_columnNames[] = { "Name", "Regular Expression", "Policy", "Notes" };
-	Object entity_columnNames[] = { "Entity Text", "Type", "Count", "Policy", "Notes" };
-
-	class Entity {
-		public Entity(String text, String type) {
-			this.text = text;
-			this.type = type;
-			this.policy = defaultAction;
-			this.count = 1;
-			this.notes = "";
-		}
-		public String text;
-		public String type;
-		public Action policy;
-		public String notes;
-		public int count;
-		public void incr() {
-			this.count++;
-		}
-	}
-	
-	
-	enum Action {
-		Redact, Ignore, Ask
-	}
 
 	AbstractTableModel tableModel_pdfs = new AbstractTableModel() {
 		private static final long serialVersionUID = 1L;
@@ -130,6 +104,8 @@ public class RedactionApp {
 				return pdfFiles.get(row).getName();
 			case 1:
 				return pdfFiles.get(row).getParentFile().getPath();
+			case 2:
+				return getOutputFile(pdfFiles.get(row)).getPath();
 			default:
 				return "n/a";
 			}
@@ -137,18 +113,19 @@ public class RedactionApp {
 	};
 
 	AbstractTableModel tableModel_patterns = new AbstractTableModel() {
+		public Object columnNames[] = { "Name", "Expression", "Default Action", "Notes" };
 		private static final long serialVersionUID = 1L;
 
 		public String getColumnName(int column) {
-			return pattern_columnNames[column].toString();
+			return columnNames[column].toString();
 		}
 
 		public int getRowCount() {
-			return patterns.size();
+			return expressions.size();
 		}
 
 		public int getColumnCount() {
-			return pattern_columnNames.length;
+			return columnNames.length;
 		}
 		
         public boolean isCellEditable(int row, int col) {
@@ -157,22 +134,51 @@ public class RedactionApp {
 
 		@Override
 		public void setValueAt(Object value, int row, int col) {
-			Object[] pattern = patterns.get(row);
-			pattern[col] = value;
+			String key = expressionOrder.get(row);
+			ExpressionPattern p = expressions.get(key);
+			switch(col) {
+			case 0:
+				p.label = (String)value;
+				return;
+			case 1:
+				// TODO check valid expression
+				p.regex = (String)value;
+				return;
+			case 2:
+				p.policy = (Action)value;
+				return;
+			case 3:
+				p.notes = (String)value;
+				return;
+			}
+			fireTableCellUpdated(row, col);
 		}
 
 		public Object getValueAt(int row, int col) {
-			Object[] pattern = patterns.get(row);
-			return pattern[col];
+			String key = expressionOrder.get(row);
+			ExpressionPattern p = expressions.get(key);
+			switch(col) {
+			case 0:
+				return p.label;
+			case 1:
+				return p.regex;
+			case 2:
+				return p.policy;
+			case 3:
+				return p.notes;
+			default:
+				return "";
+			}
 		}
 	};
 	
 	
 	AbstractTableModel tableModel_entities = new AbstractTableModel() {
 		private static final long serialVersionUID = 1L;
+		Object columnNames[] = { "Entity Text", "Type", "Count", "Default Action", "Notes" };
 
 		public String getColumnName(int column) {
-			return entity_columnNames[column].toString();
+			return columnNames[column].toString();
 		}
 
 		public int getRowCount() {
@@ -180,7 +186,7 @@ public class RedactionApp {
 		}
 
 		public int getColumnCount() {
-			return entity_columnNames.length;
+			return columnNames.length;
 		}
 		
         public boolean isCellEditable(int row, int col) {
@@ -190,7 +196,7 @@ public class RedactionApp {
 		@Override
 		public void setValueAt(Object value, int row, int col) {
 			String name = entityOrder.get(row);
-			Entity e = entities.get(name);
+			EntityPattern e = entities.get(name);
 			switch(col) {
 			case 0:
 				e.text = (String)value;
@@ -205,11 +211,12 @@ public class RedactionApp {
 				e.notes = (String)value;
 				return;
 			}
+			fireTableCellUpdated(row, col);
 		}
 
 		public Object getValueAt(int row, int col) {
 			String name = entityOrder.get(row);
-			Entity e = entities.get(name);
+			EntityPattern e = entities.get(name);
 			switch(col) {
 			case 0:
 				return e.text;
@@ -228,6 +235,46 @@ public class RedactionApp {
 	private JTable table;
 	private String outPath;
 	private RedactDialog redactDialog;
+	private final javax.swing.Action actionAddPDFs = new AbstractAction("Add PDFs") {
+		private static final long serialVersionUID = 1L;
+		@Override
+		public void actionPerformed(ActionEvent e) {
+			int retVal = fileChooser_pdfs.showOpenDialog(frmBitcuratorPdfRedact);
+			if (retVal == JFileChooser.APPROVE_OPTION) {
+				File[] files = fileChooser_pdfs.getSelectedFiles();
+				addPDFPaths(files);
+			}
+		}
+	};
+	private final javax.swing.Action actionClearPDFs = new AbstractAction("Clear PDFs") {
+		private static final long serialVersionUID = 1L;
+		@Override
+		public void actionPerformed(ActionEvent e) {
+			entities.clear();
+			entityOrder.clear();
+			tableModel_entities.fireTableDataChanged();
+			clearPDFPaths();
+		}
+		@Override
+		public boolean isEnabled() {
+			return pdfFiles != null && pdfFiles.size() > 0;
+		}
+	};
+	private javax.swing.Action actionRunEntityAnalysis = new AbstractAction("Detect Entities") {
+		private static final long serialVersionUID = 1L;
+		@Override
+		public void actionPerformed(ActionEvent e) {
+			entities.clear();
+			entityOrder.clear();
+			tableModel_entities.fireTableDataChanged();
+			startEntityAnalysisWorker();
+		}
+		@Override
+		public boolean isEnabled() {
+			return pdfFiles != null && pdfFiles.size() > 0;
+		}
+	};
+	
 
 	/**
 	 * Launch the application.
@@ -241,6 +288,7 @@ public class RedactionApp {
 		final String outPathAbsolute = Paths.get(outPathArg).toFile().getAbsolutePath();
 
 		// Build the list of PDFs
+		@SuppressWarnings("unchecked")
 		List<Object> infiles = (List<Object>)opts.get("FILE");
 		File[] files = infiles.stream()
 				.map(a -> new File((String) a))
@@ -274,28 +322,80 @@ public class RedactionApp {
 	 * Initialize the contents of the frame.
 	 */
 	private void initialize() {
-		loadPattens();
+		loadExpressions();
 		frmBitcuratorPdfRedact = new JFrame();
 		frmBitcuratorPdfRedact.setTitle("BitCurator PDF Redact");
 		frmBitcuratorPdfRedact.setBounds(50, 50, 800, 600);
 		frmBitcuratorPdfRedact.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		
+		JMenuBar menuBar = new JMenuBar();
+		frmBitcuratorPdfRedact.setJMenuBar(menuBar);
+		
+		JMenu mnFile = new JMenu("File");
+		menuBar.add(mnFile);
+		mnFile.setMnemonic('F');
+		
+		JMenuItem mntmAddPdfs = new JMenuItem("Add PDFs");
+		mntmAddPdfs.setAction(actionAddPDFs);
+		mnFile.add(mntmAddPdfs);
+		
+		JMenuItem mntmClearPdfs = new JMenuItem("Clear PDFs");
+		mntmClearPdfs.setAction(actionClearPDFs);
+		mnFile.add(mntmClearPdfs);
+		
+		JMenu mnNewMenu = new JMenu("Named Entities");
+		mnNewMenu.setMnemonic('N');
+		menuBar.add(mnNewMenu);
+		
+		JMenu mnRecognitionTool = new JMenu("Recognition Tool");
+		mnNewMenu.add(mnRecognitionTool);
+		
+		JRadioButtonMenuItem rdbtnmntmCorenlp = new JRadioButtonMenuItem("CoreNLP");
+		rdbtnmntmCorenlp.setSelected(true);
+		mnRecognitionTool.add(rdbtnmntmCorenlp);
+		
+		JRadioButtonMenuItem rdbtnmntmSpacey = new JRadioButtonMenuItem("Spacey");
+		mnRecognitionTool.add(rdbtnmntmSpacey);
+		
+		JCheckBoxMenuItem chckbxmntmNewCheckItem = new JCheckBoxMenuItem("Detect People");
+		chckbxmntmNewCheckItem.setSelected(true);
+		mnNewMenu.add(chckbxmntmNewCheckItem);
+		
+		JCheckBoxMenuItem chckbxmntmDetectOrganizations = new JCheckBoxMenuItem("Detect Organizations");
+		chckbxmntmDetectOrganizations.setSelected(true);
+		mnNewMenu.add(chckbxmntmDetectOrganizations);
+		
+		JCheckBoxMenuItem chckbxmntmDetectPlaces = new JCheckBoxMenuItem("Detect Places");
+		mnNewMenu.add(chckbxmntmDetectPlaces);
+		
+		JCheckBoxMenuItem chckbxmntmNewCheckItem_1 = new JCheckBoxMenuItem("Detect ??");
+		mnNewMenu.add(chckbxmntmNewCheckItem_1);
+		
+		JMenuItem mntmClearNamedEntities = new JMenuItem("Detect Entities");
+		mntmClearNamedEntities.setAction(actionRunEntityAnalysis);
+		mnNewMenu.add(mntmClearNamedEntities);
+		
+		JMenu mnHelp = new JMenu("Help");
+		mnHelp.setHorizontalAlignment(SwingConstants.RIGHT);
+		mnHelp.setMnemonic('H');
+		menuBar.add(mnHelp);
+		
+		JMenuItem mntmOverview = new JMenuItem("Overview");
+		mnHelp.add(mntmOverview);
+		
+		JMenuItem mntmAbout = new JMenuItem("About");
+		mnHelp.add(mntmAbout);
 		frmBitcuratorPdfRedact.getContentPane().add(toolBar, BorderLayout.NORTH);
 
 		JButton btnAddFiles = new JButton("Add PDFs");
-		btnAddFiles.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent arg0) {
-				int retVal = fileChooser_pdfs.showOpenDialog(frmBitcuratorPdfRedact);
-				if (retVal == JFileChooser.APPROVE_OPTION) {
-					File[] files = fileChooser_pdfs.getSelectedFiles();
-					addPDFPaths(files);
-				}
-			}
-		});
+		btnAddFiles.setAction(actionAddPDFs);
 		toolBar.add(btnAddFiles);
-
-		JCheckBox chckbxDetectEntities = new JCheckBox("detect entities");
-		chckbxDetectEntities.setSelected(true);
-		toolBar.add(chckbxDetectEntities);
+		
+		JButton btnClearPdfs = new JButton("Clear PDFs");
+		toolBar.add(btnClearPdfs);
+		
+		JButton btnClearEntities = new JButton("Clear Entities");
+		toolBar.add(btnClearEntities);
 
 		JSeparator separator = new JSeparator();
 		separator.setOrientation(SwingConstants.VERTICAL);
@@ -305,7 +405,7 @@ public class RedactionApp {
 		toolBar.add(btnBeginRedaction);
 
 		JSplitPane splitPane = new JSplitPane();
-		splitPane.setDividerLocation(150);
+		splitPane.setDividerLocation(250);
 		frmBitcuratorPdfRedact.getContentPane().add(splitPane, BorderLayout.CENTER);
 
 		Dimension minimumSize = new Dimension(500, 400);
@@ -336,11 +436,11 @@ public class RedactionApp {
 		
 		table_entities = new JTable();
 		table_entities.setModel(tableModel_entities);
-		TableColumn policyColumn = table_entities.getColumn(entity_columnNames[2]);
+		TableColumn policyColumn = table_entities.getColumn(tableModel_entities.getColumnName(3));
 		policyColumn.setCellEditor(new DefaultCellEditor(patternAction_comboBox));
-		table_entities.setFillsViewportHeight(true);
+		//table_entities.setFillsViewportHeight(true);
 		table_entities.setBorder(new BevelBorder(BevelBorder.LOWERED, null, null, null, null));
-		table_entities.setPreferredSize(new Dimension(400, 300));
+		//table_entities.setPreferredSize(new Dimension(400, 300));
 		JScrollPane entities_scrollPane = new JScrollPane(table_entities);
 		entities_scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
 		panel_Entities.add(entities_scrollPane, BorderLayout.CENTER);
@@ -359,15 +459,15 @@ public class RedactionApp {
 		textArea.setBackground(UIManager.getColor("Button.background"));
 		panel_Patterns.add(textArea, BorderLayout.NORTH);
 
-		table_patterns = new JTable();
-		table_patterns.setFillsViewportHeight(true);
-		table_patterns.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-		table_patterns.setPreferredSize(new Dimension(400, 300));
-		table_patterns.setBorder(new BevelBorder(BevelBorder.LOWERED, null, null, null, null));
-		table_patterns.setModel(tableModel_patterns);
-		TableColumn patternPolicyColumn = table_patterns.getColumn(pattern_columnNames[2]);
+		table_expressions = new JTable();
+		//table_expressions.setFillsViewportHeight(true);
+		table_expressions.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+		//table_expressions.setPreferredSize(new Dimension(400, 300));
+		table_expressions.setBorder(new BevelBorder(BevelBorder.LOWERED, null, null, null, null));
+		table_expressions.setModel(tableModel_patterns);
+		TableColumn patternPolicyColumn = table_expressions.getColumn(tableModel_patterns.getColumnName(2));
 		patternPolicyColumn.setCellEditor(new DefaultCellEditor(patternAction_comboBox));
-		JScrollPane patterns_scrollPane = new JScrollPane(table_patterns);
+		JScrollPane patterns_scrollPane = new JScrollPane(table_expressions);
 		patterns_scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
 		panel_Patterns.add(patterns_scrollPane, BorderLayout.CENTER);
 
@@ -377,20 +477,22 @@ public class RedactionApp {
 		panel_Files.setLayout(new BorderLayout(0, 0));
 				
 		table = new JTable();
-		table.setFillsViewportHeight(true);
+		//table.setFillsViewportHeight(true);
+		table.setPreferredScrollableViewportSize(new Dimension(200, 600));
 		table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-		table.setPreferredSize(new Dimension(400, 300));
 		table.setBorder(new BevelBorder(BevelBorder.LOWERED, null, null, null, null));
 		table.setModel(tableModel_pdfs);
 		table.getColumn(file_columnNames[0]).setCellRenderer(
 	            new DefaultTableCellRenderer() {
-	               @Override
+					private static final long serialVersionUID = 1L;
+
+				@Override
 	               public Component getTableCellRendererComponent(JTable table,
 	                     Object value, boolean isSelected, boolean hasFocus,
 	                     int row, int column) {
 	                  JLabel superRenderer = (JLabel)super.getTableCellRendererComponent(table, 
 	                        value, isSelected, hasFocus, row, column);
-	                  Color backgroundColor = getBackground();
+	                  //Color backgroundColor = getBackground();
 	                  if(file_analyses.containsKey(pdfFiles.get(row))) {
 	                	  PDFAnalysis a = file_analyses.get(pdfFiles.get(row));
 	                	  if(a.error != null) {
@@ -413,7 +515,7 @@ public class RedactionApp {
 		    public void mousePressed(MouseEvent mouseEvent) {
 		        if (mouseEvent.getClickCount() == 2) {
 		        	int row = table.rowAtPoint(mouseEvent.getPoint());
-		        	if(table.getSelectedRow() != -1) {
+		        	if(0 <= row && row < pdfFiles.size()) {
 		        		redact(pdfFiles.get(row));
 		            }
 		        }
@@ -454,9 +556,16 @@ public class RedactionApp {
 		this.redactDialog = new RedactDialog();
 	}
 
-	private void loadPattens() {
+	private void loadExpressions() {
 		// name, regular expression, policy, notes
-		patterns.add(new Object[] {"Social Security Number", "\\d{3}-\\d{2}-\\d{4}", Action.Redact, ""});
+		ExpressionPattern p = new ExpressionPattern("Social Security Number", "\\d{3}-\\d{2}-\\d{4}", Action.Redact);
+		expressionOrder.add(p.getRegex());
+		expressions.put(p.getRegex(), p);
+	}
+	
+	private void clearPDFPaths() {
+		pdfFiles.clear();
+		tableModel_pdfs.fireTableDataChanged();
 	}
 
 	private void addPDFPaths(final File[] pdfPaths) throws Error {
@@ -516,6 +625,7 @@ public class RedactionApp {
 					switch ((StateValue) event.getNewValue()) {
 					case DONE:
 						startEntityAnalysisWorker();
+					default:
 					}
 				}
 			}
@@ -530,18 +640,17 @@ public class RedactionApp {
 			@Override
 			protected void process(List<PDFAnalysis> chunks) {
 				for(PDFAnalysis a : chunks) {
-					if(a.entities != null) {
+					if(a.entities != null && a.entities.length > 0) {
 						Arrays.stream(a.entities)
 							.forEach( x -> {
-								if(!entities.containsKey(x[0])) {
-									entities.put(x[0], new Entity(x[0], x[1]));
+								EntityPattern p = new EntityPattern(x[0], x[1], defaultAction);
+								if(!entities.containsKey(p.getLabel())) {
+									entities.put(p.getLabel(), p);
 								} else {
-									entities.get(x[0]).incr();
+									entities.get(p.getLabel()).incr();
 								}
+								pattern_files.put(p.getLabel(), a.file);
 							});
-						Arrays.stream(a.entities).forEach( x -> {
-							entity_files.put(x[0], a.file);
-						});
 					}
 					file_analyses.put(a.file, a);
 				}
@@ -558,21 +667,29 @@ public class RedactionApp {
 	
 	private void redact(File file) {
 		// TODO Alert if redacted file already exists..
-		List<Entity> fileEntities = new ArrayList<>();
-		entity_files.entries().parallelStream().forEach( x -> {
+		List<TextPattern> filePatterns = new ArrayList<>();
+		pattern_files.entries().parallelStream().forEach( x -> {
 			if(file.equals(x.getValue())) {
-				fileEntities.add(entities.get(x.getKey()));
+				TextPattern p = entities.get(x.getKey());
+				if(p != null) filePatterns.add(p);
 			}
 		});
-		File outFile = Paths.get(outPath, file.getAbsolutePath()).toFile();
-		Collections.sort(fileEntities, Comparator.comparing(x -> { return ((Entity)x).text;})); 
+		filePatterns.stream().filter( x -> x == null).forEach( x -> System.out.println(x));
+		//log.error("nulls: "+count);
+		File outFile = getOutputFile(file);
+		Collections.sort(filePatterns, Comparator.comparing(x -> { return ((TextPattern)x).getLabel();}));
+		filePatterns.addAll(this.expressions.values());
 		try {
-			this.redactDialog.startDoc(file, outFile, fileEntities);
+			this.redactDialog.startDoc(file, outFile, filePatterns);
 			this.redactDialog.setVisible(true);
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		
+	}
+	
+	private File getOutputFile(File inputFile) {
+		File outFile = Paths.get(outPath, inputFile.getAbsolutePath()).toFile();
+		return outFile;
 	}
 }

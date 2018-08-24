@@ -28,6 +28,7 @@ public class PDFAnalysisWorker extends SwingWorker<Set<PDFAnalysis>, PDFAnalysis
 	StanfordCoreNLP pipeline;
 	
 	public class AnalysisException extends Exception {
+		private static final long serialVersionUID = 1L;
 		File file;
 		Throwable cause;
 		AnalysisException(File f, Throwable e) {
@@ -57,8 +58,7 @@ public class PDFAnalysisWorker extends SwingWorker<Set<PDFAnalysis>, PDFAnalysis
 			pipeline = new StanfordCoreNLP(props);
 		}
 		int errors = 0;
-		int successes = 0;
-		fileloop: for (File f : pdfs) {
+		for (File f : pdfs) {
 			PdfDocument pdfDoc = null;
 			try {
 				try {

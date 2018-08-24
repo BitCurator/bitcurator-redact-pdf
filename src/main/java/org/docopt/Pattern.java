@@ -38,7 +38,6 @@ abstract class Pattern {
 		}
 	}
 
-	@SuppressWarnings("unchecked")
 	private static final List<Class<? extends BranchPattern>> PARENTS = Arrays
 			.asList(Required.class, Optional.class, OptionsShortcut.class,
 					Either.class, OneOrMore.class);

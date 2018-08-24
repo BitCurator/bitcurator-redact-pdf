@@ -6,13 +6,13 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
+import java.util.List;
 
 import javax.swing.JPanel;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.itextpdf.kernel.geom.PageSize;
 import com.itextpdf.kernel.pdf.PdfPage;
 import com.itextpdf.layout.Document;
 import com.itextpdf.pdfcleanup.PdfCleanUpLocation;
@@ -22,17 +22,32 @@ class PreviewPanel extends JPanel {
 
 	private static final long serialVersionUID = 8082940778123734607L;
 	BufferedImage pageImage = null;
-	Rectangle location = null;
-	private boolean paintedPage;
+	int page = -1;
+	Rectangle currentLocation = null;
+	List<RedactLocation> locations = null;
+	//private boolean paintedPage;
+	
+	public Color redactColor = new Color(0, 0, 0, .4f);
+	public Color askColor = new Color(1, 0, 0, .4f);
+
+	private com.itextpdf.kernel.geom.Rectangle pageSize;
 
 	PreviewPanel() {
+		log.debug("Created PreviewPanel");
 		// set a preferred size for the custom panel.
 		//setPreferredSize(new Dimension(420, 420));
+		this.locations = locations;
+	}
+	
+	public void setRedactLocations(List<RedactLocation> locations) {
+		this.locations = locations;
 	}
 
-	public void setPageImage(BufferedImage image) {
+	public void setPage(BufferedImage image, int page, com.itextpdf.kernel.geom.Rectangle pageSize) {
 		this.pageImage = image;
-		this.paintedPage = false;
+		this.page = page;
+		this.pageSize = pageSize;
+		//this.paintedPage = false;
 	}
 
 	
@@ -52,27 +67,19 @@ class PreviewPanel extends JPanel {
 		com.itextpdf.kernel.geom.Rectangle r = loc.getRegion();
 		PdfPage page = doc.getPdfDocument().getPage(loc.getPage());
 		com.itextpdf.kernel.geom.Rectangle pageSize = page.getPageSize();
-		
-		// Pdf Region => lower left point
-		log.info("Rect {} x/y: {}/{}", r, r.getX(), r.getY());
-		log.info("Margins T:{} B:{} L:{} R:{}", doc.getTopMargin(), doc.getBottomMargin(), doc.getLeftMargin(), doc.getRightMargin());
-		
-		// AWT Rectangle => upper left point
-		int awtX = (int)(r.getX());
-		int awtY = (int)(pageSize.getHeight()-r.getY()-r.getHeight()/*+doc.getTopMargin()*/);
-		location = new Rectangle(awtX, awtY, (int)r.getWidth(), (int)r.getHeight());
-		log.info("preview rectangle: {}", location);
-		log.info("Art box :{}", page.getArtBox());
-		log.info("Bleed box :{}", page.getBleedBox());
-		log.info("Crop box :{}", page.getCropBox());
-		log.info("Media box :{}", page.getMediaBox());
-		log.info("Trim box :{}", page.getTrimBox());
-		log.info("pagesize: {}", pageSize);
-		com.itextpdf.kernel.geom.Rectangle pr = doc.getPageEffectiveArea(new PageSize(pageSize));
-		log.info("Effective pagesize: {}", pr);
-		log.info("image size: {}", getPreferredSize());
-		//location.translate
+		this.currentLocation = translateLocation(r, pageSize);
 		repaint(500);
+	}
+	
+	public void clearPDFLocation() {
+		this.currentLocation = null;
+		repaint(500);
+	}
+	
+	private Rectangle translateLocation(com.itextpdf.kernel.geom.Rectangle location, com.itextpdf.kernel.geom.Rectangle pageSize) {
+		int awtX = (int)(location.getX());
+		int awtY = (int)(pageSize.getHeight()-location.getY()-location.getHeight());
+		return new Rectangle(awtX, awtY, (int)location.getWidth(), (int)location.getHeight());
 	}
 
 	@Override
@@ -85,14 +92,35 @@ class PreviewPanel extends JPanel {
 		}
 		//this.paintedPage = true;
 		// g.drawString("BLAH", 20, 20);
-		if (location != null) {
-			Color prev = g.getColor();
-			g.setColor(Color.red);
-			g.drawRect(location.x, location.y, location.width, location.height);
-			g.drawRect(location.x-1, location.y-1, location.width+2, location.height+2);
-			g.setColor(prev);
-			this.scrollRectToVisible(location);
+		Color prev = g.getColor();
+		//.getSize().g.setComposite(AlphaComposite.SrcOver.derive(0.8f));
+		for(RedactLocation rl : this.locations) {
+			if(rl.page == page) {
+				Rectangle r = translateLocation(rl.loc.getRegion(), pageSize);
+				switch(rl.action) {
+				case Redact:
+					g.setColor(redactColor);
+					g.fillRect(r.x-1, r.y-1, r.width+2, r.height+2);
+					break;
+				case Ignore:
+					g.setColor(Color.GRAY);
+					g.drawRect(r.x, r.y, r.width, r.height);
+					g.drawRect(r.x-1, r.y-1, r.width+2, r.height+2);
+					break;
+				case Ask:
+					g.setColor(askColor);
+					g.fillRect(r.x-1, r.y-1, r.width+2, r.height+2);
+					break;
+				}
+			}
 		}
+		if (currentLocation != null) {
+			g.setColor(Color.red);
+			g.drawRect(currentLocation.x, currentLocation.y, currentLocation.width, currentLocation.height);
+			g.drawRect(currentLocation.x-1, currentLocation.y-1, currentLocation.width+2, currentLocation.height+2);
+			this.scrollRectToVisible(currentLocation);
+		}
+		g.setColor(prev);
 	}
 	
 }
