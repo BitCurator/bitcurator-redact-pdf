@@ -13,7 +13,6 @@ public abstract class TextPattern {
 		this.count++;
 	}
 	public Action policy;
-	public String notes;
 	public abstract String getRegex();
 	public abstract String getLabel();
 	public abstract String getType();

@@ -8,7 +8,6 @@ public class EntityPattern extends TextPattern {
 		this.type = type;
 		this.policy = policy;
 		this.count = 1;
-		this.notes = "";
 	}
 	public String text;
 	public String type;

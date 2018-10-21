@@ -3,8 +3,6 @@ package bca.redact;
 import java.io.File;
 import java.util.Objects;
 
-import bca.redact.PDFAnalysisWorker.AnalysisException;
-
 public class PDFAnalysis {
 	public File file;
 	public String[][] entities;

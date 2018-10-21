@@ -1,0 +1,11 @@
+bin/
+build/
+libs/
+output/
+bca_redact-pdf/
+.classpath
+.gradle/
+.project
+.settings/
+wbp-meta/
+gradle/

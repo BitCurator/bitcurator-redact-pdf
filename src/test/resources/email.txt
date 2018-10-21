@@ -1,0 +1,7 @@
+# BANNER FILE NOT PROVIDED (-b option)
+# BULK_EXTRACTOR-Version: 1.6.0-dev ($Rev: 10844 $)
+# Feature-Recorder: email
+# Filename: /home/bcadmin/Desktop/test_image.raw
+# Feature-File-Version: 1.1
+160380	business@pglaf.org	96-1887, email\x0D\x0Abusiness@pglaf.org.  Email contact
+160645	gbnewby@pglaf.org	 Director\x0D\x0A     gbnewby@pglaf.org\x0D\x0A\x0D\x0ASection 4.

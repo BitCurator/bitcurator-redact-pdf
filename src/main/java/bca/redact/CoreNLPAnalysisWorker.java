@@ -20,22 +20,13 @@ import edu.stanford.nlp.pipeline.CoreDocument;
 import edu.stanford.nlp.pipeline.CoreEntityMention;
 import edu.stanford.nlp.pipeline.StanfordCoreNLP;
 
-public class PDFAnalysisWorker extends SwingWorker<Set<PDFAnalysis>, PDFAnalysis> {
-	private static final Logger log = Logger.getLogger(PDFAnalysisWorker.class);
+public class CoreNLPAnalysisWorker extends AnalysisWorker {
+	private static final Logger log = Logger.getLogger(CoreNLPAnalysisWorker.class);
 	private static Properties props = new Properties();
 	private static final String[][] empty = new String[][] {};
 	File[] pdfs;
 	StanfordCoreNLP pipeline;
-	
-	public class AnalysisException extends Exception {
-		private static final long serialVersionUID = 1L;
-		File file;
-		Throwable cause;
-		AnalysisException(File f, Throwable e) {
-			file=f;
-			cause=e;
-		}
-	}
+	private Set<String> entityTypesIncluded = new HashSet<>();
 
 	static {
 		props.setProperty("annotators", "tokenize,ssplit,pos,ner");
@@ -47,8 +38,11 @@ public class PDFAnalysisWorker extends SwingWorker<Set<PDFAnalysis>, PDFAnalysis
 		props.setProperty("ner.applyFineGrained", "false");
 	}
 
-	PDFAnalysisWorker(File[] pdfs) {
+	CoreNLPAnalysisWorker(File[] pdfs, boolean includePerson, boolean includeLocation, boolean includeOrganization) {
 		this.pdfs = pdfs;
+		if(includeOrganization) entityTypesIncluded.add("ORGANIZATION");
+		if(includePerson) entityTypesIncluded.add("PERSON");
+		if(includeLocation) entityTypesIncluded.add("LOCATION");
 	}
 
 	@Override
@@ -86,7 +80,9 @@ public class PDFAnalysisWorker extends SwingWorker<Set<PDFAnalysis>, PDFAnalysis
 				}
 				List<String[]> pdfentities = new ArrayList<>();
 				for (CoreEntityMention cem : doc.entityMentions()) {
-					pdfentities.add(new String[] {cem.text(), cem.entityType()});
+					if(entityTypesIncluded.contains(cem.entityType())) {
+						pdfentities.add(new String[] {cem.text(), cem.entityType()});
+					}
 				}
 				PDFAnalysis analysis = new PDFAnalysis(f, pdfentities.toArray(empty));
 				analyses.add(analysis);
@@ -101,7 +97,9 @@ public class PDFAnalysisWorker extends SwingWorker<Set<PDFAnalysis>, PDFAnalysis
 				}
 			}
 		}
-		log.error("There were PDF Entity Analysis errors: "+errors);
+		if(errors > 0) {
+			log.error("There were PDF Entity Analysis errors: "+errors);
+		}
 		return analyses;
 	}
 

@@ -52,6 +52,7 @@ public class RedactDialog extends JDialog {
 	public class RedactionsTableModel extends AbstractTableModel {
 		private static final long serialVersionUID = 1L;
 		public final String[] cols = new String[] { "Page", "Text", "Type", "Action" };
+		Color defaultBackground = null;
 
 		@Override
 		public String getColumnName(int column) {
@@ -104,36 +105,6 @@ public class RedactDialog extends JDialog {
 		}
 	}
 
-	public class StatusColumnCellRenderer extends DefaultTableCellRenderer {
-		private static final long serialVersionUID = 1L;
-
-		@Override
-		  public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int col) {
-
-		    //Cells are by default rendered as a JLabel.
-		    JLabel l = (JLabel) super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, col);
-
-		    //Get the status for the current row.
-		    RedactionsTableModel tableModel = (RedactionsTableModel) table.getModel();
-		    Action a = tableModel.getAction(row);
-		    switch(a) {
-		    case Redact:
-		      l.setBackground(Color.green.brighter());
-		      break;
-		    case Ignore:
-			    l.setBackground(Color.yellow.brighter());
-			    break;
-		    case Ask:
-		    	l.setBackground(Color.PINK);
-		    	break;
-		    }
-
-		  //Return the JLabel which renders the cell.
-		  return l;
-
-		}
-	}
-
 	Logger log = LoggerFactory.getLogger(RedactDialog.class);
 	private static final long serialVersionUID = 2027484467240740791L;
 
@@ -160,6 +131,7 @@ public class RedactDialog extends JDialog {
 	private int currentPage = -1;
 	private Document layoutDoc;
 	private JTable table;
+	Color backgroundColor = null;
 	
 	public RedactDialog() {
 		setDefaultCloseOperation(HIDE_ON_CLOSE);
@@ -180,6 +152,12 @@ public class RedactDialog extends JDialog {
 		toolBar.add(button);
 		
 		Button Close = new Button("Close");
+		Close.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				close();
+			}
+		});
 		toolBar.add(Close);
 		//setModalityType(ModalityType.DOCUMENT_MODAL);
 
@@ -191,12 +169,6 @@ public class RedactDialog extends JDialog {
 		//previewPanel.setMinimumSize(new Dimension(600, 400));
 		previewPanel.setBackground(new java.awt.Color(255, 255, 255));
 		previewPanel.setBorder(BorderFactory.createBevelBorder(BevelBorder.RAISED));
-		previewPanel.addMouseListener(new MouseAdapter() {
-			@Override
-			public void mousePressed(MouseEvent e) {
-	        	log.info("mouse pressed at: {}",  e.getPoint());
-			}
-		});
 		
 		JScrollPane scrolls = new JScrollPane(previewPanel, JScrollPane.VERTICAL_SCROLLBAR_ALWAYS,
 				JScrollPane.HORIZONTAL_SCROLLBAR_ALWAYS);
@@ -236,7 +208,7 @@ public class RedactDialog extends JDialog {
 	                     int row, int column) {
 	                  JLabel superRenderer = (JLabel)super.getTableCellRendererComponent(table, 
 	                        value, isSelected, hasFocus, row, column);
-	                  Color backgroundColor = getBackground();
+	                  if(backgroundColor == null) backgroundColor = getBackground();
 	                  RedactLocation rl = redactLocations.get(row);
 	                  java.awt.Font f = superRenderer.getFont();
 	                  if(!rl.pattern.policy.equals(Action.Ask) && !rl.pattern.policy.equals(rl.action)) {
@@ -271,12 +243,10 @@ public class RedactDialog extends JDialog {
 		JScrollPane scrollPane = new JScrollPane(table);
 		scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
 		panel.add(scrollPane, BorderLayout.EAST);
-		
 		pack();
 	}
 
 	public void markPageLocation(RedactLocation loc) {
-		log.info("Marking redact location for \"{}\"", loc.pattern.getRegex());
 		if (loc.page != this.currentPage) {
 			setPreviewPage(loc.page);
 		}
@@ -290,7 +260,6 @@ public class RedactDialog extends JDialog {
 		try {
 			cleaner.cleanUp();
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		closeDoc();
@@ -303,6 +272,14 @@ public class RedactDialog extends JDialog {
 		this.doc = null;
 		this.pageImage = null;
 		this.currentPage = -1;
+		this.redactLocations.clear();
+		tableModel.fireTableDataChanged();
+	}
+	
+	public void close() {
+		this.setVisible(false);
+		previewPanel.clearPDFLocation();
+		closeDoc();
 	}
 
 	public void startDoc(File pdfFile, File outputFile, List<TextPattern> filePatterns)
@@ -322,16 +299,11 @@ public class RedactDialog extends JDialog {
 			this.layoutDoc = new Document(this.itextPDF);
 			PatternFindingWorker worker = new PatternFindingWorker(itextPDF, this.patterns) {
 				@Override
-				protected void done() {
-					// ?? all locations loaded
-				}
-
-				@Override
 				protected void process(List<RedactLocation> newLocations) {
 					log.info("Found {} redaction locations.", newLocations.size());
 					redactLocations.addAll(newLocations);
 					java.util.Collections.sort(redactLocations);
-					if (currentPage == -1) {
+					if (currentPage == -1 && !newLocations.isEmpty()) {
 						RedactLocation l = newLocations.get(0);
 						markPageLocation(l);
 					}
@@ -344,7 +316,8 @@ public class RedactDialog extends JDialog {
 		}
 		this.previewPanel.clearPDFLocation();
 		this.previewPanel.setRedactLocations(redactLocations);
-		setPreviewPage(1);
+		tableModel.fireTableDataChanged();
+		//setPreviewPage(1);
 		pack();
 	}
 

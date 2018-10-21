@@ -9,7 +9,6 @@ public class ExpressionPattern extends TextPattern {
 		this.regex = regex;
 		this.policy = policy;
 		this.count = 1;
-		this.notes = "";
 	}
 
 	@Override

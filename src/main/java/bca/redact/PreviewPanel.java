@@ -27,8 +27,9 @@ class PreviewPanel extends JPanel {
 	List<RedactLocation> locations = null;
 	//private boolean paintedPage;
 	
-	public Color redactColor = new Color(0, 0, 0, .4f);
-	public Color askColor = new Color(1, 0, 0, .4f);
+	public static Color redactColor = new Color(0, 0, 0, .4f);
+	public static Color y = Color.yellow.brighter();
+	public static Color askColor = new Color(y.getRed(), y.getGreen(), y.getBlue(), 100);
 
 	private com.itextpdf.kernel.geom.Rectangle pageSize;
 
@@ -36,7 +37,6 @@ class PreviewPanel extends JPanel {
 		log.debug("Created PreviewPanel");
 		// set a preferred size for the custom panel.
 		//setPreferredSize(new Dimension(420, 420));
-		this.locations = locations;
 	}
 	
 	public void setRedactLocations(List<RedactLocation> locations) {

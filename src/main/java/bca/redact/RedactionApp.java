@@ -5,7 +5,9 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.EventQueue;
+import java.awt.Point;
 import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.beans.PropertyChangeEvent;
@@ -19,11 +21,14 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import javax.swing.AbstractAction;
+import javax.swing.ButtonGroup;
 import javax.swing.DefaultCellEditor;
 import javax.swing.JButton;
 import javax.swing.JCheckBoxMenuItem;
@@ -35,6 +40,7 @@ import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
 import javax.swing.JRadioButtonMenuItem;
 import javax.swing.JScrollPane;
 import javax.swing.JSeparator;
@@ -46,40 +52,52 @@ import javax.swing.JToolBar;
 import javax.swing.ListSelectionModel;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.SwingWorker.StateValue;
 import javax.swing.UIManager;
 import javax.swing.border.BevelBorder;
 import javax.swing.border.EmptyBorder;
+import javax.swing.event.PopupMenuEvent;
+import javax.swing.event.PopupMenuListener;
 import javax.swing.filechooser.FileFilter;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableColumn;
 
-import org.apache.commons.collections4.MultiValuedMap;
-import org.apache.commons.collections4.multimap.HashSetValuedHashMap;
+import org.apache.commons.collections4.ListValuedMap;
+import org.apache.commons.collections4.multimap.ArrayListValuedHashMap;
 import org.apache.log4j.Logger;
 import org.docopt.Docopt;
+
+import com.lowagie.text.Font;
 
 public class RedactionApp {
 	private static final Logger log = Logger.getLogger(RedactionApp.class);
 	private static final File[] EMPTY_FILE_ARRAY = new File[] {};
+	private static final String DEFAULT_PATTERNS_PATH = "bca_redact-pdf/default_patterns.txt";
 	protected static final Color ANALYZED_BG_COLOR = Color.lightGray;
 	private Action defaultAction = Action.Ignore;
 	
 	private JFrame frmBitcuratorPdfRedact;
-	private final JToolBar toolBar = new JToolBar();
 	private JTable table_entities;
 	private JTable table_expressions;
 	private JFileChooser fileChooser_pdfs;
-
+	private JFileChooser fileChooser_textpattern;
+	private ButtonGroup nlpToolGroup;
+	private JCheckBoxMenuItem chckbxmntmDetectPlaces;
+	private JCheckBoxMenuItem chckbxmntmDetectPersons;
+	private JCheckBoxMenuItem chckbxmntmDetectOrganizations;
+	
+	
 	private List<File> pdfFiles = new ArrayList<>();
 	private Map<File, PDFAnalysis> file_analyses = new HashMap<>();
-	private MultiValuedMap<String, File> pattern_files = new HashSetValuedHashMap<>();
+	private ListValuedMap<String, File> pattern_files = new ArrayListValuedHashMap<>();
 	private Map<String, EntityPattern> entities = new HashMap<String, EntityPattern>();
 	private List<String> entityOrder = new ArrayList<String>();
-	private Map<String, ExpressionPattern> expressions = new HashMap<>();
-	private List<String> expressionOrder = new ArrayList<String>();
+	private List<ExpressionPattern> expressions = new ArrayList<>();
+	private boolean useSpacy = false;
+	Color backgroundColor = null;
 	
 	Object file_columnNames[] = { "Filename", "Path", "Redacted File" };
 
@@ -113,7 +131,7 @@ public class RedactionApp {
 	};
 
 	AbstractTableModel tableModel_patterns = new AbstractTableModel() {
-		public Object columnNames[] = { "Name", "Expression", "Default Action", "Notes" };
+		public Object columnNames[] = { "Name", "Expression", "Default Action" };
 		private static final long serialVersionUID = 1L;
 
 		public String getColumnName(int column) {
@@ -134,8 +152,7 @@ public class RedactionApp {
 
 		@Override
 		public void setValueAt(Object value, int row, int col) {
-			String key = expressionOrder.get(row);
-			ExpressionPattern p = expressions.get(key);
+			ExpressionPattern p = expressions.get(row);
 			switch(col) {
 			case 0:
 				p.label = (String)value;
@@ -147,16 +164,12 @@ public class RedactionApp {
 			case 2:
 				p.policy = (Action)value;
 				return;
-			case 3:
-				p.notes = (String)value;
-				return;
 			}
 			fireTableCellUpdated(row, col);
 		}
 
 		public Object getValueAt(int row, int col) {
-			String key = expressionOrder.get(row);
-			ExpressionPattern p = expressions.get(key);
+			ExpressionPattern p = expressions.get(row);
 			switch(col) {
 			case 0:
 				return p.label;
@@ -164,8 +177,6 @@ public class RedactionApp {
 				return p.regex;
 			case 2:
 				return p.policy;
-			case 3:
-				return p.notes;
 			default:
 				return "";
 			}
@@ -175,7 +186,7 @@ public class RedactionApp {
 	
 	AbstractTableModel tableModel_entities = new AbstractTableModel() {
 		private static final long serialVersionUID = 1L;
-		Object columnNames[] = { "Entity Text", "Type", "Count", "Default Action", "Notes" };
+		Object columnNames[] = { "Entity Text", "Type", "Count", "Default Action"};
 
 		public String getColumnName(int column) {
 			return columnNames[column].toString();
@@ -190,7 +201,7 @@ public class RedactionApp {
 		}
 		
         public boolean isCellEditable(int row, int col) {
-            return col == 3 || col == 4;
+            return col == 3;
         }
 
 		@Override
@@ -206,9 +217,6 @@ public class RedactionApp {
 				return;
 			case 3:
 				e.policy = (Action)value;
-				return;
-			case 4:
-				e.notes = (String)value;
 				return;
 			}
 			fireTableCellUpdated(row, col);
@@ -226,8 +234,6 @@ public class RedactionApp {
 				return e.count;
 			case 3:
 				return e.policy;
-			case 4:
-				return e.notes;
 			}
 			return "?";
 		}
@@ -235,7 +241,7 @@ public class RedactionApp {
 	private JTable table;
 	private String outPath;
 	private RedactDialog redactDialog;
-	private final javax.swing.Action actionAddPDFs = new AbstractAction("Add PDFs") {
+	private final javax.swing.Action actionAddPDFs = new AbstractAction("Open File(s)..") {
 		private static final long serialVersionUID = 1L;
 		@Override
 		public void actionPerformed(ActionEvent e) {
@@ -246,32 +252,136 @@ public class RedactionApp {
 			}
 		}
 	};
-	private final javax.swing.Action actionClearPDFs = new AbstractAction("Clear PDFs") {
+	private final javax.swing.Action actionClearPDFs = new AbstractAction("Clear All") {
 		private static final long serialVersionUID = 1L;
 		@Override
 		public void actionPerformed(ActionEvent e) {
 			entities.clear();
 			entityOrder.clear();
+			pattern_files.clear();
 			tableModel_entities.fireTableDataChanged();
 			clearPDFPaths();
 		}
-		@Override
-		public boolean isEnabled() {
-			return pdfFiles != null && pdfFiles.size() > 0;
-		}
 	};
-	private javax.swing.Action actionRunEntityAnalysis = new AbstractAction("Detect Entities") {
+	private javax.swing.Action actionRunEntityAnalysis = new AbstractAction("Run Recognition") {
 		private static final long serialVersionUID = 1L;
 		@Override
 		public void actionPerformed(ActionEvent e) {
 			entities.clear();
 			entityOrder.clear();
+			pattern_files.clear();
 			tableModel_entities.fireTableDataChanged();
 			startEntityAnalysisWorker();
 		}
+	};
+	
+	private javax.swing.Action actionImportPatterns = new AbstractAction("Open File(s)..") {
+		private static final long serialVersionUID = 1L;
 		@Override
-		public boolean isEnabled() {
-			return pdfFiles != null && pdfFiles.size() > 0;
+		public void actionPerformed(ActionEvent e) {
+			fileChooser_textpattern.setDialogTitle("Open text patterns file(s)");
+			int retVal = fileChooser_textpattern.showOpenDialog(frmBitcuratorPdfRedact);
+			if (retVal == JFileChooser.APPROVE_OPTION) {
+				File[] files = fileChooser_textpattern.getSelectedFiles();
+				for(File f : files) {
+					TextPatternUtil.loadExpressionActionList(f).stream()
+					.forEach(p -> {
+						log.info(p.label);
+						expressions.add(p);
+					});
+				}
+				tableModel_patterns.fireTableDataChanged();
+			}
+		}
+	};
+	
+	private javax.swing.Action actionImportBEPatterns = new AbstractAction("Import Bulk Extractor features..") {
+		private static final long serialVersionUID = 1L;
+		@Override
+		public void actionPerformed(ActionEvent e) {
+			fileChooser_textpattern.setDialogTitle("Import Bulk Extractor features..");
+			int retVal = fileChooser_textpattern.showOpenDialog(frmBitcuratorPdfRedact);
+			if (retVal == JFileChooser.APPROVE_OPTION) {
+				File[] files = fileChooser_textpattern.getSelectedFiles();
+				for(File f : files) {
+					TextPatternUtil.loadBEFeatures(f).stream()
+					.forEach(p -> {
+						expressions.add(p);
+					});
+				}
+			}
+			tableModel_patterns.fireTableDataChanged();
+		}
+	};
+	
+	private ActionListener analysisToolListener = new ActionListener() {
+		@Override
+		public void actionPerformed(ActionEvent e) {
+			useSpacy = "spaCy".equals(e.getActionCommand());
+		}
+	};
+	
+	private javax.swing.Action actionClearEntities = new AbstractAction("Clear All") {
+		private static final long serialVersionUID = 1L;
+		@Override
+		public void actionPerformed(ActionEvent arg0) {
+			entities = Collections.emptyMap();
+			entityOrder = Collections.emptyList();
+			tableModel_entities.fireTableDataChanged();
+		}
+	};
+	
+	private javax.swing.Action actionSaveAsPatterns = new AbstractAction("Save As..") {
+		private static final long serialVersionUID = 1L;
+		@Override
+		public void actionPerformed(ActionEvent e) {
+			JFileChooser jfc = new JFileChooser();
+			jfc.setDialogType(JFileChooser.SAVE_DIALOG);
+			jfc.setDialogTitle("Save Text Patterns to File");
+			int retVal = jfc.showOpenDialog(frmBitcuratorPdfRedact);
+			if(retVal != jfc.CANCEL_OPTION) {
+				File f = jfc.getSelectedFile();
+				TextPatternUtil.saveExpressionPatterns(f, expressions);
+			}
+		}
+	};
+	
+	private javax.swing.Action actionResetDefaultPatterns = new AbstractAction("Reset to Defaults") {
+		private static final long serialVersionUID = 1L;
+		@Override
+		public void actionPerformed(ActionEvent arg0) {
+			expressions.clear();
+			TextPatternUtil.loadExpressionActionList(new File(DEFAULT_PATTERNS_PATH))
+				.stream()
+				.forEach(p -> {
+					expressions.add(p);
+				});
+			tableModel_patterns.fireTableDataChanged();
+		}			
+	};
+	
+	private javax.swing.Action actionSaveDefaultPatterns = new AbstractAction("Save as Defaults") {
+		private static final long serialVersionUID = 1L;
+		@Override
+		public void actionPerformed(ActionEvent e) {
+			TextPatternUtil.saveExpressionPatterns(new File(DEFAULT_PATTERNS_PATH), expressions);
+		}
+	};
+	
+	private javax.swing.Action actionClearPatterns = new AbstractAction("Clear All") {
+		private static final long serialVersionUID = 1L;
+		@Override
+		public void actionPerformed(ActionEvent e) {
+			expressions.clear();
+			tableModel_patterns.fireTableDataChanged();
+		}
+	};
+	private javax.swing.Action actionAddPattern = new AbstractAction("New Pattern") {
+		private static final long serialVersionUID = 1L;
+		@Override
+		public void actionPerformed(ActionEvent arg0) {
+			expressions.add(new ExpressionPattern("Add a label", "", Action.Ask));
+			tableModel_patterns.fireTableDataChanged();
 		}
 	};
 	
@@ -331,20 +441,20 @@ public class RedactionApp {
 		JMenuBar menuBar = new JMenuBar();
 		frmBitcuratorPdfRedact.setJMenuBar(menuBar);
 		
-		JMenu mnFile = new JMenu("File");
+		JMenu mnFile = new JMenu("PDF Files");
 		menuBar.add(mnFile);
 		mnFile.setMnemonic('F');
 		
-		JMenuItem mntmAddPdfs = new JMenuItem("Add PDFs");
+		JMenuItem mntmAddPdfs = new JMenuItem("Open File(s)..");
 		mntmAddPdfs.setAction(actionAddPDFs);
 		mnFile.add(mntmAddPdfs);
 		
-		JMenuItem mntmClearPdfs = new JMenuItem("Clear PDFs");
+		JMenuItem mntmClearPdfs = new JMenuItem("Clear All");
 		mntmClearPdfs.setAction(actionClearPDFs);
 		mnFile.add(mntmClearPdfs);
 		
-		JMenu mnNewMenu = new JMenu("Named Entities");
-		mnNewMenu.setMnemonic('N');
+		JMenu mnNewMenu = new JMenu("Entity Recognition");
+		mnNewMenu.setMnemonic('E');
 		menuBar.add(mnNewMenu);
 		
 		JMenu mnRecognitionTool = new JMenu("Recognition Tool");
@@ -352,28 +462,68 @@ public class RedactionApp {
 		
 		JRadioButtonMenuItem rdbtnmntmCorenlp = new JRadioButtonMenuItem("CoreNLP");
 		rdbtnmntmCorenlp.setSelected(true);
+		rdbtnmntmCorenlp.setActionCommand("CoreNLP");
+		rdbtnmntmCorenlp.addActionListener(analysisToolListener);
 		mnRecognitionTool.add(rdbtnmntmCorenlp);
 		
-		JRadioButtonMenuItem rdbtnmntmSpacey = new JRadioButtonMenuItem("Spacey");
-		mnRecognitionTool.add(rdbtnmntmSpacey);
+		JRadioButtonMenuItem rdbtnmntmSpacy = new JRadioButtonMenuItem("spaCy");
+		rdbtnmntmSpacy.setActionCommand("spaCy");
+		rdbtnmntmSpacy.addActionListener(analysisToolListener);
+		mnRecognitionTool.add(rdbtnmntmSpacy);
+		nlpToolGroup = new ButtonGroup();
+		nlpToolGroup.add(rdbtnmntmSpacy);
+		nlpToolGroup.add(rdbtnmntmCorenlp);
 		
-		JCheckBoxMenuItem chckbxmntmNewCheckItem = new JCheckBoxMenuItem("Detect People");
-		chckbxmntmNewCheckItem.setSelected(true);
-		mnNewMenu.add(chckbxmntmNewCheckItem);
+		JMenuItem mntmRunEntities = new JMenuItem("Run Entity Recognition");
+		mntmRunEntities.setAction(actionRunEntityAnalysis);
+		mnNewMenu.add(mntmRunEntities);
 		
-		JCheckBoxMenuItem chckbxmntmDetectOrganizations = new JCheckBoxMenuItem("Detect Organizations");
+		chckbxmntmDetectPersons = new JCheckBoxMenuItem("Include Persons");
+		chckbxmntmDetectPersons.setSelected(true);
+		mnNewMenu.add(chckbxmntmDetectPersons);
+		
+		chckbxmntmDetectPlaces = new JCheckBoxMenuItem("Include Locations");
+		chckbxmntmDetectPlaces.setSelected(true);
+		mnNewMenu.add(chckbxmntmDetectPlaces);
+		
+		chckbxmntmDetectOrganizations = new JCheckBoxMenuItem("Include Organizations");
 		chckbxmntmDetectOrganizations.setSelected(true);
 		mnNewMenu.add(chckbxmntmDetectOrganizations);
 		
-		JCheckBoxMenuItem chckbxmntmDetectPlaces = new JCheckBoxMenuItem("Detect Places");
-		mnNewMenu.add(chckbxmntmDetectPlaces);
-		
-		JCheckBoxMenuItem chckbxmntmNewCheckItem_1 = new JCheckBoxMenuItem("Detect ??");
-		mnNewMenu.add(chckbxmntmNewCheckItem_1);
-		
-		JMenuItem mntmClearNamedEntities = new JMenuItem("Detect Entities");
-		mntmClearNamedEntities.setAction(actionRunEntityAnalysis);
+		JMenuItem mntmClearNamedEntities = new JMenuItem("Clear All");
+		mntmClearNamedEntities.setAction(actionClearEntities);
 		mnNewMenu.add(mntmClearNamedEntities);
+		
+		JMenu mnTextPatterns = new JMenu("Text Patterns");
+		menuBar.add(mnTextPatterns);
+		
+		JMenuItem mntmNewPattern = new JMenuItem("Add Pattern");
+		mntmNewPattern.setAction(actionAddPattern);
+		mnTextPatterns.add(mntmNewPattern);
+		
+		JMenuItem mntmImportPatterns = new JMenuItem("Open File(s)..");
+		mntmImportPatterns.setAction(actionImportPatterns);
+		mnTextPatterns.add(mntmImportPatterns);
+		
+		JMenuItem mntmSaveAsPatterns = new JMenuItem("Save as..");
+		mntmSaveAsPatterns.setAction(actionSaveAsPatterns);
+		mnTextPatterns.add(mntmSaveAsPatterns);
+		
+		JMenuItem mntmResetDefaultPatterns = new JMenuItem("Reset to Defaults");
+		mntmResetDefaultPatterns.setAction(actionResetDefaultPatterns);
+		mnTextPatterns.add(mntmResetDefaultPatterns);
+		
+		JMenuItem mntmSaveDefaultPatterns = new JMenuItem("Save as Defaults");
+		mntmSaveDefaultPatterns.setAction(actionSaveDefaultPatterns);
+		mnTextPatterns.add(mntmSaveDefaultPatterns);
+		
+		JMenuItem mntmClearPatterns = new JMenuItem("Clear All");
+		mntmClearPatterns.setAction(actionClearPatterns);
+		mnTextPatterns.add(mntmClearPatterns);
+		
+		JMenuItem mntmImportBEFeatures = new JMenuItem("Import Bulk Extractor features..");
+		mntmImportBEFeatures.setAction(actionImportBEPatterns);
+		mnTextPatterns.add(mntmImportBEFeatures);
 		
 		JMenu mnHelp = new JMenu("Help");
 		mnHelp.setHorizontalAlignment(SwingConstants.RIGHT);
@@ -385,24 +535,6 @@ public class RedactionApp {
 		
 		JMenuItem mntmAbout = new JMenuItem("About");
 		mnHelp.add(mntmAbout);
-		frmBitcuratorPdfRedact.getContentPane().add(toolBar, BorderLayout.NORTH);
-
-		JButton btnAddFiles = new JButton("Add PDFs");
-		btnAddFiles.setAction(actionAddPDFs);
-		toolBar.add(btnAddFiles);
-		
-		JButton btnClearPdfs = new JButton("Clear PDFs");
-		toolBar.add(btnClearPdfs);
-		
-		JButton btnClearEntities = new JButton("Clear Entities");
-		toolBar.add(btnClearEntities);
-
-		JSeparator separator = new JSeparator();
-		separator.setOrientation(SwingConstants.VERTICAL);
-		toolBar.add(separator);
-
-		JButton btnBeginRedaction = new JButton("Begin Redaction");
-		toolBar.add(btnBeginRedaction);
 
 		JSplitPane splitPane = new JSplitPane();
 		splitPane.setDividerLocation(250);
@@ -441,6 +573,34 @@ public class RedactionApp {
 		//table_entities.setFillsViewportHeight(true);
 		table_entities.setBorder(new BevelBorder(BevelBorder.LOWERED, null, null, null, null));
 		//table_entities.setPreferredSize(new Dimension(400, 300));
+		table_entities.getColumn(tableModel_entities.getColumnName(3)).setCellRenderer(
+	            new DefaultTableCellRenderer() {
+					private static final long serialVersionUID = 1L;
+
+				@Override
+	               public Component getTableCellRendererComponent(JTable table,
+	                     Object value, boolean isSelected, boolean hasFocus,
+	                     int row, int column) {
+	                  JLabel superRenderer = (JLabel)super.getTableCellRendererComponent(table, 
+	                        value, isSelected, hasFocus, row, column);
+	                  if(backgroundColor == null) backgroundColor = getBackground();
+	                  Action action = (Action)tableModel_entities.getValueAt(row, column);
+	                  if(!isSelected) {
+		                  switch(action) {
+		                  case Ask:
+		                   	  superRenderer.setBackground(PreviewPanel.askColor);
+		                   	  break;
+		                  case Redact:
+		                	  superRenderer.setBackground(PreviewPanel.redactColor);
+		                	  break;
+		                  case Ignore:
+		                	  superRenderer.setBackground(backgroundColor);
+		                	  break;
+		                  }
+	                  }
+	                  return superRenderer;
+	               }
+	            });
 		JScrollPane entities_scrollPane = new JScrollPane(table_entities);
 		entities_scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
 		panel_Entities.add(entities_scrollPane, BorderLayout.CENTER);
@@ -465,8 +625,85 @@ public class RedactionApp {
 		//table_expressions.setPreferredSize(new Dimension(400, 300));
 		table_expressions.setBorder(new BevelBorder(BevelBorder.LOWERED, null, null, null, null));
 		table_expressions.setModel(tableModel_patterns);
+		JPopupMenu popupMenu = new JPopupMenu();
+		popupMenu.addPopupMenuListener(new PopupMenuListener() {
+            @Override
+            public void popupMenuWillBecomeVisible(PopupMenuEvent e) {
+                SwingUtilities.invokeLater(new Runnable() {
+                    @Override
+                    public void run() {
+                        int rowAtPoint = table.rowAtPoint(SwingUtilities.convertPoint(popupMenu, new Point(0, 0), table));
+                        if (rowAtPoint > -1) {
+                            table.setRowSelectionInterval(rowAtPoint, rowAtPoint);
+                        }
+                    }
+                });
+            }
+            @Override
+            public void popupMenuWillBecomeInvisible(PopupMenuEvent e) {
+                // TODO Auto-generated method stub
+
+            }
+            @Override
+            public void popupMenuCanceled(PopupMenuEvent e) {
+                // TODO Auto-generated method stub
+            }
+        });
+		JMenuItem mntmDelete = new JMenuItem("Delete");
+		mntmDelete.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent arg0) {
+				int i = table_expressions.getSelectedRow();
+				expressions.remove(i);
+				tableModel_patterns.fireTableDataChanged();
+			}
+		});
+		popupMenu.add(mntmDelete);
+
+		JMenuItem mntmAdd = new JMenuItem("Add");
+		mntmAdd.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent arg0) {
+				int i = table_expressions.getSelectedRow();
+				expressions.add(i+1, new ExpressionPattern("", "", Action.Ask));
+				tableModel_patterns.fireTableDataChanged();
+			}
+		});
+		popupMenu.add(mntmAdd);
+		
+		table_expressions.setComponentPopupMenu(popupMenu);
+		
 		TableColumn patternPolicyColumn = table_expressions.getColumn(tableModel_patterns.getColumnName(2));
 		patternPolicyColumn.setCellEditor(new DefaultCellEditor(patternAction_comboBox));
+		table_expressions.getColumn(tableModel_patterns.getColumnName(2)).setCellRenderer(
+	            new DefaultTableCellRenderer() {
+					private static final long serialVersionUID = 1L;
+
+				@Override
+	               public Component getTableCellRendererComponent(JTable table,
+	                     Object value, boolean isSelected, boolean hasFocus,
+	                     int row, int column) {
+	                  JLabel superRenderer = (JLabel)super.getTableCellRendererComponent(table, 
+	                        value, isSelected, hasFocus, row, column);
+	                  if(backgroundColor == null) backgroundColor = getBackground();
+	                  Action action = (Action)tableModel_patterns.getValueAt(row, column);
+	                  if(!isSelected) {
+		                  switch(action) {
+		                  case Ask:
+		                   	  superRenderer.setBackground(PreviewPanel.askColor);
+		                   	  break;
+		                  case Redact:
+		                	  superRenderer.setBackground(PreviewPanel.redactColor);
+		                	  break;
+		                  case Ignore:
+		                	  superRenderer.setBackground(backgroundColor);
+		                	  break;
+		                  }
+	                  }
+	                  return superRenderer;
+	               }
+	            });
+		
 		JScrollPane patterns_scrollPane = new JScrollPane(table_expressions);
 		patterns_scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
 		panel_Patterns.add(patterns_scrollPane, BorderLayout.CENTER);
@@ -553,14 +790,39 @@ public class RedactionApp {
 			}
 
 		});
+		
+		fileChooser_textpattern = new JFileChooser();
+		fileChooser_textpattern.setDialogTitle("Import Text Patterns");
+		fileChooser_textpattern.setFileSelectionMode(JFileChooser.FILES_ONLY);
+		fileChooser_textpattern.setAcceptAllFileFilterUsed(false);
+		fileChooser_textpattern.setMultiSelectionEnabled(true);
+		fileChooser_textpattern.setFileFilter(new FileFilter() {
+			public boolean accept(File arg0) {
+				if(arg0.isDirectory()) 
+					return true;
+				if (arg0.getName().endsWith(".TXT"))
+					return true;
+				if (arg0.getName().endsWith(".txt"))
+					return true;
+				return false;
+			}
+			public String getDescription() {
+				return "Text files";
+			}
+		});
+		
 		this.redactDialog = new RedactDialog();
 	}
 
 	private void loadExpressions() {
+		if(!new File(DEFAULT_PATTERNS_PATH).exists()) {
+			new File(DEFAULT_PATTERNS_PATH).getParentFile().mkdirs();
+			ExpressionPattern p = new ExpressionPattern("Social Security Number", "\\d{3}-\\d{2}-\\d{4}", Action.Redact);
+			TextPatternUtil.saveExpressionPatterns(new File(DEFAULT_PATTERNS_PATH), Collections.singletonList(p));
+		}
 		// name, regular expression, policy, notes
-		ExpressionPattern p = new ExpressionPattern("Social Security Number", "\\d{3}-\\d{2}-\\d{4}", Action.Redact);
-		expressionOrder.add(p.getRegex());
-		expressions.put(p.getRegex(), p);
+		List<ExpressionPattern> list = TextPatternUtil.loadExpressionActionList(new File(DEFAULT_PATTERNS_PATH));
+		expressions.addAll(list);
 	}
 	
 	private void clearPDFPaths() {
@@ -634,54 +896,71 @@ public class RedactionApp {
 	}
 
 	private void startEntityAnalysisWorker() {
-		log.info("starting analysis");
-		PDFAnalysisWorker pdfAnalysisWorker = new PDFAnalysisWorker(pdfFiles.toArray(EMPTY_FILE_ARRAY)) {
-
-			@Override
-			protected void process(List<PDFAnalysis> chunks) {
-				for(PDFAnalysis a : chunks) {
-					if(a.entities != null && a.entities.length > 0) {
-						Arrays.stream(a.entities)
-							.forEach( x -> {
-								EntityPattern p = new EntityPattern(x[0], x[1], defaultAction);
-								if(!entities.containsKey(p.getLabel())) {
-									entities.put(p.getLabel(), p);
-								} else {
-									entities.get(p.getLabel()).incr();
-								}
-								pattern_files.put(p.getLabel(), a.file);
-							});
-					}
-					file_analyses.put(a.file, a);
+		AnalysisWorker pdfAnalysisWorker = null;
+		if(useSpacy) {
+			log.info("starting PDF analysis with spaCy");
+			pdfAnalysisWorker = new SpaceyAnalysisWorker(pdfFiles.toArray(EMPTY_FILE_ARRAY)) {
+				@Override
+				protected void process(List<PDFAnalysis> chunks) {
+					processAnalysisChunks(chunks);
 				}
-				entityOrder.clear();
-				entityOrder.addAll(entities.keySet());
-				Collections.sort(entityOrder);
-				tableModel_entities.fireTableDataChanged();
-				table.repaint();
-			}
-			
-		};
+			};
+		} else {
+			log.info("starting PDF analysis with CoreNLP");
+			pdfAnalysisWorker = new CoreNLPAnalysisWorker(pdfFiles.toArray(EMPTY_FILE_ARRAY),
+					chckbxmntmDetectPersons.isSelected(),
+					chckbxmntmDetectPlaces.isSelected(),
+					chckbxmntmDetectOrganizations.isSelected()) {
+				@Override
+				protected void process(List<PDFAnalysis> chunks) {
+					processAnalysisChunks(chunks);
+				}
+			};
+		}
 		pdfAnalysisWorker.execute();
+	}
+
+	private void processAnalysisChunks(List<PDFAnalysis> chunks) {
+		for(PDFAnalysis a : chunks) {
+			if(a.entities != null && a.entities.length > 0) {
+				Arrays.stream(a.entities)
+					.forEach( x -> {
+						EntityPattern p = new EntityPattern(x[0], x[1], defaultAction);
+						if(!entities.containsKey(p.getLabel())) {
+							entities.put(p.getLabel(), p);
+						} else {
+							entities.get(p.getLabel()).incr();
+						}
+						pattern_files.put(p.getLabel(), a.file);
+					});
+			}
+			file_analyses.put(a.file, a);
+		}
+		entityOrder.clear();
+		entityOrder.addAll(entities.keySet());
+		Collections.sort(entityOrder);
+		tableModel_entities.fireTableDataChanged();
+		table.repaint();
 	}
 	
 	private void redact(File file) {
 		// TODO Alert if redacted file already exists..
 		List<TextPattern> filePatterns = new ArrayList<>();
-		pattern_files.entries().parallelStream().forEach( x -> {
-			if(file.equals(x.getValue())) {
-				TextPattern p = entities.get(x.getKey());
-				if(p != null) filePatterns.add(p);
+		for(String key : pattern_files.keySet()) {
+			if(pattern_files.get(key).contains(file)) {
+				EntityPattern e = entities.get(key);
+				if(!Action.Ignore.equals(e.policy)) filePatterns.add(e);
 			}
-		});
-		filePatterns.stream().filter( x -> x == null).forEach( x -> System.out.println(x));
-		//log.error("nulls: "+count);
+		}
 		File outFile = getOutputFile(file);
+		filePatterns = filePatterns.stream().filter(p -> p != null).collect(Collectors.toList());
 		Collections.sort(filePatterns, Comparator.comparing(x -> { return ((TextPattern)x).getLabel();}));
-		filePatterns.addAll(this.expressions.values());
+		filePatterns.addAll(this.expressions.stream()
+				.filter(p -> !p.policy.equals(Action.Ignore)).collect(Collectors.toList()));
 		try {
 			this.redactDialog.startDoc(file, outFile, filePatterns);
 			this.redactDialog.setVisible(true);
+			this.redactDialog.tableModel.fireTableDataChanged();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
