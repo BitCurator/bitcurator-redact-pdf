@@ -323,7 +323,8 @@ public class RedactDialog extends JDialog {
 		this.previewPanel.clearPDFLocation();
 		this.previewPanel.setRedactLocations(redactLocations);
 		tableModel.fireTableDataChanged();
-		//setPreviewPage(1);
+		if(this.currentPage == -1)
+			setPreviewPage(1);
 		pack();
 	}
 

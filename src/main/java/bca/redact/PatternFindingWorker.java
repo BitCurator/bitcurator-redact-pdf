@@ -26,7 +26,7 @@ public class PatternFindingWorker extends SwingWorker<List<RedactLocation>, Reda
 	}
 
 	@Override
-	protected List<RedactLocation> doInBackground() throws Exception {
+	protected List<RedactLocation> doInBackground() {
 		log.info("Starting redaction scan..");
 		List<RedactLocation> locations = new ArrayList<RedactLocation>();
 		int pages = pdfDoc.getNumberOfPages();
