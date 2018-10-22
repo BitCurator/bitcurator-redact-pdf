@@ -15,7 +15,7 @@ sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
 //create a single Jar with all dependencies
-task fatJar(type: Jar) {
+task allJar(type: Jar) {
 	manifest {
         attributes 'Implementation-Title': 'BitCurator PDF Redaction',
         	'Implementation-Version': version,

@@ -24,6 +24,7 @@ import javax.swing.DefaultCellEditor;
 import javax.swing.JComboBox;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
@@ -254,6 +255,11 @@ public class RedactDialog extends JDialog {
 	}
 
 	public void redactButtonHandler() {
+		long asks = this.redactLocations.stream().filter(l -> Action.Ask.equals(l.action)).count();
+		if(asks > 0) {
+			JOptionPane.showMessageDialog(this.getContentPane(), "Please choose \"Redact\" or \"Ignore\" actions for the entities highlighted in yellow and marked \"Ask\".", "Redact Choices Required", JOptionPane.INFORMATION_MESSAGE);
+			return;
+		}
 		List<PdfCleanUpLocation> cleanUps = this.redactLocations.stream().filter(x -> Action.Redact.equals(x.action)).map(x -> x.loc)
 				.collect(Collectors.toList());
 		PdfCleanUpTool cleaner = new PdfCleanUpTool(this.itextPDF, cleanUps);
