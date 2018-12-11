@@ -7,8 +7,6 @@ import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 
-import javax.swing.SwingWorker;
-
 import org.apache.log4j.Logger;
 
 import com.itextpdf.kernel.pdf.PdfDocument;
@@ -81,7 +79,7 @@ public class CoreNLPAnalysisWorker extends AnalysisWorker {
 				List<String[]> pdfentities = new ArrayList<>();
 				for (CoreEntityMention cem : doc.entityMentions()) {
 					if(entityTypesIncluded.contains(cem.entityType())) {
-						pdfentities.add(new String[] {cem.text(), cem.entityType()});
+						pdfentities.add(new String[] {cem.text(), cem.entityType(), cem.sentence().text()});
 					}
 				}
 				PDFAnalysis analysis = new PDFAnalysis(f, pdfentities.toArray(empty));

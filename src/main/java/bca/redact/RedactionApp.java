@@ -21,16 +21,13 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 import javax.swing.AbstractAction;
 import javax.swing.ButtonGroup;
 import javax.swing.DefaultCellEditor;
-import javax.swing.JButton;
 import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JComboBox;
 import javax.swing.JFileChooser;
@@ -43,12 +40,10 @@ import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JRadioButtonMenuItem;
 import javax.swing.JScrollPane;
-import javax.swing.JSeparator;
 import javax.swing.JSplitPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
-import javax.swing.JToolBar;
 import javax.swing.ListSelectionModel;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.SwingConstants;
@@ -63,14 +58,13 @@ import javax.swing.event.PopupMenuListener;
 import javax.swing.filechooser.FileFilter;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.TableCellRenderer;
 import javax.swing.table.TableColumn;
 
 import org.apache.commons.collections4.ListValuedMap;
 import org.apache.commons.collections4.multimap.ArrayListValuedHashMap;
 import org.apache.log4j.Logger;
 import org.docopt.Docopt;
-
-import com.lowagie.text.Font;
 
 public class RedactionApp {
 	private static final Logger log = Logger.getLogger(RedactionApp.class);
@@ -186,7 +180,7 @@ public class RedactionApp {
 	
 	AbstractTableModel tableModel_entities = new AbstractTableModel() {
 		private static final long serialVersionUID = 1L;
-		Object columnNames[] = { "Entity Text", "Type", "Count", "Default Action"};
+		Object columnNames[] = { "Entity Text", "Type", "#", "Files", "Default Action"};
 
 		public String getColumnName(int column) {
 			return columnNames[column].toString();
@@ -201,7 +195,7 @@ public class RedactionApp {
 		}
 		
         public boolean isCellEditable(int row, int col) {
-            return col == 3;
+            return col == 4;
         }
 
 		@Override
@@ -215,7 +209,7 @@ public class RedactionApp {
 			case 1:
 				e.type = (String)value;
 				return;
-			case 3:
+			case 4:
 				e.policy = (Action)value;
 				return;
 			}
@@ -233,6 +227,8 @@ public class RedactionApp {
 			case 2:
 				return e.count;
 			case 3:
+				return pattern_files.get(e.getLabel()).stream().distinct().count();
+			case 4:
 				return e.policy;
 			}
 			return "?";
@@ -339,7 +335,7 @@ public class RedactionApp {
 			jfc.setDialogType(JFileChooser.SAVE_DIALOG);
 			jfc.setDialogTitle("Save Text Patterns to File");
 			int retVal = jfc.showOpenDialog(frmBitcuratorPdfRedact);
-			if(retVal != jfc.CANCEL_OPTION) {
+			if(retVal != JFileChooser.CANCEL_OPTION) {
 				File f = jfc.getSelectedFile();
 				TextPatternUtil.saveExpressionPatterns(f, expressions);
 			}
@@ -567,13 +563,46 @@ public class RedactionApp {
         patternAction_comboBox.addItem(Action.Redact);
 		
 		table_entities = new JTable();
+		table_entities.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+		//table_entities.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
 		table_entities.setModel(tableModel_entities);
-		TableColumn policyColumn = table_entities.getColumn(tableModel_entities.getColumnName(3));
+		TableCellRenderer rend = table_entities.getTableHeader().getDefaultRenderer();
+		TableColumn tc0 = table_entities.getColumn(tableModel_entities.getColumnName(0));
+		tc0.setHeaderRenderer(rend);
+		tc0.setPreferredWidth(60);
+		TableColumn tc1 = table_entities.getColumn(tableModel_entities.getColumnName(1));
+		tc1.setHeaderRenderer(rend);
+		tc1.setPreferredWidth(20);
+		TableColumn tc2 = table_entities.getColumn(tableModel_entities.getColumnName(2));
+		tc2.setHeaderRenderer(rend);
+		tc2.sizeWidthToFit();
+		TableColumn tc3 = table_entities.getColumn(tableModel_entities.getColumnName(3));
+		tc3.setHeaderRenderer(rend);
+		tc3.sizeWidthToFit();
+		TableColumn policyColumn = table_entities.getColumn(tableModel_entities.getColumnName(4));
+		policyColumn.setHeaderRenderer(rend);
+		policyColumn.sizeWidthToFit();
 		policyColumn.setCellEditor(new DefaultCellEditor(patternAction_comboBox));
 		//table_entities.setFillsViewportHeight(true);
 		table_entities.setBorder(new BevelBorder(BevelBorder.LOWERED, null, null, null, null));
 		//table_entities.setPreferredSize(new Dimension(400, 300));
-		table_entities.getColumn(tableModel_entities.getColumnName(3)).setCellRenderer(
+		table_entities.getColumn(tableModel_entities.getColumnName(0)).setCellRenderer(
+	            new DefaultTableCellRenderer() {
+					private static final long serialVersionUID = 1L;
+
+				@Override
+	               public Component getTableCellRendererComponent(JTable table,
+	                     Object value, boolean isSelected, boolean hasFocus,
+	                     int row, int column) {
+	                  JLabel superRenderer = (JLabel)super.getTableCellRendererComponent(table, 
+	                        value, isSelected, hasFocus, row, column);
+	                  String name = entityOrder.get(row);
+	      			  EntityPattern e = entities.get(name);
+	                  superRenderer.setToolTipText(e.getExampleSentence());
+	                  return superRenderer;
+	               }
+	            });
+		table_entities.getColumn(tableModel_entities.getColumnName(4)).setCellRenderer(
 	            new DefaultTableCellRenderer() {
 					private static final long serialVersionUID = 1L;
 
@@ -926,10 +955,15 @@ public class RedactionApp {
 				Arrays.stream(a.entities)
 					.forEach( x -> {
 						EntityPattern p = new EntityPattern(x[0], x[1], defaultAction);
+						p.setExampleSentence(x[2]);
 						if(!entities.containsKey(p.getLabel())) {
 							entities.put(p.getLabel(), p);
 						} else {
-							entities.get(p.getLabel()).incr();
+							EntityPattern e = entities.get(p.getLabel());
+							if(x[2].length() < 200 && x[2].length() > e.getExampleSentence().length()) {
+								e.setExampleSentence(x[2]);
+							}
+							e.incr();
 						}
 						pattern_files.put(p.getLabel(), a.file);
 					});

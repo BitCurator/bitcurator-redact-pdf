@@ -10,7 +10,6 @@ import org.apache.log4j.Logger;
 
 public class SpaceyAnalysisWorker extends AnalysisWorker {
 	private static final Logger log = Logger.getLogger(SpaceyAnalysisWorker.class);
-	private static final String[][] empty = new String[][] {};
 	File[] pdfs;
 
 	SpaceyAnalysisWorker(File[] pdfs) {

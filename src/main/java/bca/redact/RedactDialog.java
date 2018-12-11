@@ -228,10 +228,10 @@ public class RedactDialog extends JDialog {
 	                  if(!isSelected) {
 		                  switch(rl.action) {
 		                  case Ask:
-		                   	  superRenderer.setBackground(previewPanel.askColor);
+		                   	  superRenderer.setBackground(PreviewPanel.askColor);
 		                   	  break;
 		                  case Redact:
-		                	  superRenderer.setBackground(previewPanel.redactColor);
+		                	  superRenderer.setBackground(PreviewPanel.redactColor);
 		                	  break;
 		                  case Ignore:
 		                	  superRenderer.setBackground(backgroundColor);

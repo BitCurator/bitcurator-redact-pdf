@@ -207,6 +207,7 @@ final class Python {
 		return true;
 	}
 
+	@SafeVarargs
 	public static <T> boolean in(final T left, final T... right) {
 		for (final Object o : right) {
 			if (left != null) {

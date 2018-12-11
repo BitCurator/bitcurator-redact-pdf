@@ -146,8 +146,8 @@ We are going to proceed step-by-step through the redaction of a sample file, `sa
  * Option to "Remember this choice for pattern X".
 
 ## Possible Features
-* Display other coordinates (which files) and stats (# instances) for extracted entities.
+* DONE Display other coordinates (which files) and stats (# instances) for extracted entities.
 * User editable extracted entities, e.g. to remove extraneous words/tokens.
-* At least one example textual context for the extracted entity, perhaps all..
+* DONE At least one example textual context for the extracted entity, perhaps all..
 * DONE Keep making/re-making redaction decisions until you actually redact that PDF.
 * DONE Redact the same PDF again to overwrite the previously redacted file.

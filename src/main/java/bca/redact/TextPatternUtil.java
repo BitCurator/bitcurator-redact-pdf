@@ -13,10 +13,8 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import org.apache.commons.io.IOUtils;
-import org.apache.log4j.Logger;
 
 public class TextPatternUtil {
-	private static final Logger log = Logger.getLogger(TextPatternUtil.class);
 
 	public static List<ExpressionPattern> loadBEFeatures(File f) {
 		try {

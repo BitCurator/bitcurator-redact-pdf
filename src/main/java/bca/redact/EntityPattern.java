@@ -11,6 +11,7 @@ public class EntityPattern extends TextPattern {
 	}
 	public String text;
 	public String type;
+	public String sentence;
 	
 	@Override
 	public String getRegex() {
@@ -26,4 +27,13 @@ public class EntityPattern extends TextPattern {
 	public String getType() {
 		return this.type;
 	}
+	
+	public String getExampleSentence() {
+		return this.sentence;
+	}
+	
+	public void setExampleSentence(String sentence) {
+		this.sentence = sentence;
+	}
+
 }
