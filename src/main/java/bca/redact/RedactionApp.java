@@ -93,7 +93,7 @@ public class RedactionApp {
 	private boolean useSpacy = false;
 	Color backgroundColor = null;
 	
-	Object file_columnNames[] = { "Filename", "Path", "Redacted File" };
+	Object file_columnNames[] = { "Filename", "Path", "Output" };
 
 	AbstractTableModel tableModel_pdfs = new AbstractTableModel() {
 		private static final long serialVersionUID = 1L;
@@ -117,7 +117,12 @@ public class RedactionApp {
 			case 1:
 				return pdfFiles.get(row).getParentFile().getPath();
 			case 2:
-				return getOutputFile(pdfFiles.get(row)).getPath();
+				File output = getOutputFile(pdfFiles.get(row));
+				if(output.exists()) {
+					return output.getPath();
+				} else {
+					return "";
+				}
 			default:
 				return "n/a";
 			}
@@ -125,7 +130,7 @@ public class RedactionApp {
 	};
 
 	AbstractTableModel tableModel_patterns = new AbstractTableModel() {
-		public Object columnNames[] = { "Name", "Expression", "Default Action" };
+		public Object columnNames[] = { "Name", "Expression", "Action" };
 		private static final long serialVersionUID = 1L;
 
 		public String getColumnName(int column) {
@@ -180,7 +185,7 @@ public class RedactionApp {
 	
 	AbstractTableModel tableModel_entities = new AbstractTableModel() {
 		private static final long serialVersionUID = 1L;
-		Object columnNames[] = { "Entity Text", "Type", "#", "Files", "Default Action"};
+		Object columnNames[] = { "Entity Text", "Type", "#", "Files", "Action"};
 
 		public String getColumnName(int column) {
 			return columnNames[column].toString();
@@ -564,24 +569,26 @@ public class RedactionApp {
 		
 		table_entities = new JTable();
 		table_entities.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-		//table_entities.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
+		table_entities.setAutoResizeMode(JTable.AUTO_RESIZE_SUBSEQUENT_COLUMNS);
 		table_entities.setModel(tableModel_entities);
 		TableCellRenderer rend = table_entities.getTableHeader().getDefaultRenderer();
 		TableColumn tc0 = table_entities.getColumn(tableModel_entities.getColumnName(0));
 		tc0.setHeaderRenderer(rend);
-		tc0.setPreferredWidth(60);
+		tc0.setPreferredWidth(250);
 		TableColumn tc1 = table_entities.getColumn(tableModel_entities.getColumnName(1));
 		tc1.setHeaderRenderer(rend);
-		tc1.setPreferredWidth(20);
+		tc1.setPreferredWidth(150);
 		TableColumn tc2 = table_entities.getColumn(tableModel_entities.getColumnName(2));
 		tc2.setHeaderRenderer(rend);
-		tc2.sizeWidthToFit();
+		//tc2.sizeWidthToFit();
+		tc2.setPreferredWidth(35);
 		TableColumn tc3 = table_entities.getColumn(tableModel_entities.getColumnName(3));
 		tc3.setHeaderRenderer(rend);
-		tc3.sizeWidthToFit();
+		//tc3.sizeWidthToFit();
+		tc3.setPreferredWidth(35);
 		TableColumn policyColumn = table_entities.getColumn(tableModel_entities.getColumnName(4));
 		policyColumn.setHeaderRenderer(rend);
-		policyColumn.sizeWidthToFit();
+		policyColumn.setPreferredWidth(100);
 		policyColumn.setCellEditor(new DefaultCellEditor(patternAction_comboBox));
 		//table_entities.setFillsViewportHeight(true);
 		table_entities.setBorder(new BevelBorder(BevelBorder.LOWERED, null, null, null, null));

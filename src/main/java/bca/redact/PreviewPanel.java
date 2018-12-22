@@ -6,6 +6,7 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
+import java.util.Collections;
 import java.util.List;
 
 import javax.swing.JPanel;
@@ -24,7 +25,7 @@ class PreviewPanel extends JPanel {
 	BufferedImage pageImage = null;
 	int page = -1;
 	Rectangle currentLocation = null;
-	List<RedactLocation> locations = null;
+	List<RedactLocation> locations = Collections.emptyList();
 	//private boolean paintedPage;
 	
 	public static Color redactColor = new Color(0, 0, 0, .4f);
@@ -48,6 +49,7 @@ class PreviewPanel extends JPanel {
 		this.page = page;
 		this.pageSize = pageSize;
 		//this.paintedPage = false;
+		repaint(500);
 	}
 
 	

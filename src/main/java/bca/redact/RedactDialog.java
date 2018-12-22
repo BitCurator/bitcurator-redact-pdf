@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultCellEditor;
 import javax.swing.JComboBox;
@@ -47,9 +48,11 @@ import com.itextpdf.layout.Document;
 import com.itextpdf.pdfcleanup.PdfCleanUpLocation;
 import com.itextpdf.pdfcleanup.PdfCleanUpTool;
 import com.lowagie.text.Font;
+import javax.swing.JButton;
 
 
 public class RedactDialog extends JDialog {
+	
 	public class RedactionsTableModel extends AbstractTableModel {
 		private static final long serialVersionUID = 1L;
 		public final String[] cols = new String[] { "Page", "Text", "Type", "Action" };
@@ -134,6 +137,27 @@ public class RedactDialog extends JDialog {
 	private JTable table;
 	Color backgroundColor = null;
 	
+	private final javax.swing.Action actionNextPage = new AbstractAction("Next >") {
+		private static final long serialVersionUID = 1L;
+		@Override
+		public void actionPerformed(ActionEvent e) {
+			setPreviewPage(currentPage + 1);
+		}
+	};
+	
+	private final javax.swing.Action actionPrevPage = new AbstractAction("< Prev") {
+		private static final long serialVersionUID = 1L;
+		@Override
+		public void actionPerformed(ActionEvent e) {
+			setPreviewPage(currentPage - 1);
+		}
+	};
+	
+	private void updateEnabledPaging() {
+		this.actionNextPage.setEnabled( layoutDoc != null && currentPage < layoutDoc.getPdfDocument().getNumberOfPages() );
+		this.actionPrevPage.setEnabled( currentPage > 1 );
+	}
+	
 	public RedactDialog() {
 		setDefaultCloseOperation(HIDE_ON_CLOSE);
 		setModal(false);
@@ -143,23 +167,31 @@ public class RedactDialog extends JDialog {
 		JToolBar toolBar = new JToolBar();
 		getContentPane().add(toolBar, BorderLayout.SOUTH);
 		
-		Button button = new Button("Redact");
-		button.addActionListener(new ActionListener() {
+		JButton btnPrev = new JButton("< Prev");
+		btnPrev.setAction(actionPrevPage);
+		toolBar.add(btnPrev);
+		
+		JButton btnNext = new JButton("Next >");
+		btnNext.setAction(actionNextPage);
+		toolBar.add(btnNext);
+		
+		Button btnRedact = new Button("Redact");
+		btnRedact.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent arg0) {
 				redactButtonHandler();
 			}
 		});
-		toolBar.add(button);
+		toolBar.add(btnRedact);
 		
-		Button Close = new Button("Close");
-		Close.addActionListener(new ActionListener() {
+		Button btnClose = new Button("Close");
+		btnClose.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				close();
 			}
 		});
-		toolBar.add(Close);
+		toolBar.add(btnClose);
 		//setModalityType(ModalityType.DOCUMENT_MODAL);
 
 		JPanel panel = new JPanel(new BorderLayout());
@@ -255,18 +287,22 @@ public class RedactDialog extends JDialog {
 	}
 
 	public void redactButtonHandler() {
+		log.info("in redact button handler");
 		long asks = this.redactLocations.stream().filter(l -> Action.Ask.equals(l.action)).count();
 		if(asks > 0) {
 			JOptionPane.showMessageDialog(this.getContentPane(), "Please choose \"Redact\" or \"Ignore\" actions for the entities highlighted in yellow and marked \"Ask\".", "Redact Choices Required", JOptionPane.INFORMATION_MESSAGE);
 			return;
 		}
+		log.info("in redact button handler, past the asks check");
 		List<PdfCleanUpLocation> cleanUps = this.redactLocations.stream().filter(x -> Action.Redact.equals(x.action)).map(x -> x.loc)
 				.collect(Collectors.toList());
 		PdfCleanUpTool cleaner = new PdfCleanUpTool(this.itextPDF, cleanUps);
 		try {
+			log.info("in redact button handler, starting cleanup");
 			cleaner.cleanUp();
+			log.info("in redact button handler, past the cleanup operation");
 		} catch (IOException e) {
-			e.printStackTrace();
+			log.error("in redact button handler, cleanup threw error", e);
 		}
 		closeDoc();
 	}
@@ -332,9 +368,12 @@ public class RedactDialog extends JDialog {
 		try {
 			SimpleRenderer renderer = new SimpleRenderer();
 			renderer.setResolution(72);
-			BufferedImage pageImage = (BufferedImage) renderer.render(doc, i - 1, i - 1).get(0);
+			List<Image> pages = renderer.render(doc, i - 1, i - 1);
+			log.info("size of image list: {}", pages.size());
+			BufferedImage pageImage = (BufferedImage)pages.get(0);
 			previewPanel.setPage(pageImage, i, itextPDF.getPage(i).getPageSize());
 			this.currentPage = i;
+			updateEnabledPaging();
 		} catch (Exception e) {
 			throw new Error(e);
 		}
