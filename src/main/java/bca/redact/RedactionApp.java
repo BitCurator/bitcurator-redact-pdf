@@ -30,6 +30,7 @@ import javax.swing.ButtonGroup;
 import javax.swing.DefaultCellEditor;
 import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JComboBox;
+import javax.swing.JDialog;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -386,6 +387,15 @@ public class RedactionApp {
 		}
 	};
 	
+	private javax.swing.Action actionAbout = new AbstractAction("About") {
+		private static final long serialVersionUID = 1L;
+		@Override
+		public void actionPerformed(ActionEvent e) {
+			JDialog f = new SimpleAboutDialog(new JFrame());
+		    f.setVisible(true);
+		}
+	};
+	
 
 	/**
 	 * Launch the application.
@@ -535,6 +545,7 @@ public class RedactionApp {
 		mnHelp.add(mntmOverview);
 		
 		JMenuItem mntmAbout = new JMenuItem("About");
+		mntmAbout.setAction(actionAbout);
 		mnHelp.add(mntmAbout);
 
 		JSplitPane splitPane = new JSplitPane();
