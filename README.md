@@ -9,7 +9,7 @@ NOTE: The BitCurator Redactor redacts PDF text areas completely. It replaces the
 1. Start BitCurator VM and then open the terminal.
 1. At the terminal, clone the project's code repository:
     ```
-    $ git clone https://github.com/bitcurator/bitcurator-redact-pdf.git
+    $ git clone https://github.com/bitcurator/bitcurator-redact-pdf
     ```
 1. Change to the project directory:
     ```
@@ -33,6 +33,10 @@ programs you have just installed to the default library path.
 1. Check your version of Java. At least Java 8 (v1.8) is recommended:
     ```
     $ java -version
+    ```
+1. Make sure you're in the directory noted in step 7 above (the following command assumes you cloned the repositories into your home directory; modify as required:
+    ```
+    $ cd ~/bitcurator-redact-pdf/build/libs
     ```
 1. Run Java, using the `-jar` option:
     ```
