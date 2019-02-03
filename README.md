@@ -80,7 +80,7 @@ You have the option of loading one or more feature files from Bulk Extractor as 
 ## Sample File Walk-Through
 We are going to proceed step-by-step through the redaction of a sample file, `samples/Abstract.pdf` in your bitcurator-redact-pdf project folder. This is an abstract for an unrelated grant project. It mentions several named entities and is a properly formatted PDF file. Let's get started.
 
-1. First open the *BitCurator Redactor* program. As a reminder, this file is located at **build/libs/bitcurator/bitcurator-redact-pdf-all-1.0.jar** inside the **bitcurator-redact-pdf**folder. You can double-click on this file, or from a terminal (assuming you cloned the repository into your home directory) run the following:
+1. First open the *BitCurator Redactor* program. As a reminder, this file is located at **build/libs/bitcurator/bitcurator-redact-pdf-all-1.0.jar** inside the **bitcurator-redact-pdf** folder. If you set the executable permissions earlier, you can double-click on this file, or from a terminal (assuming you cloned the repository into your home directory) run the following:
    ```
    $ cd ~/bitcurator-redact-pdf/build/libs
    $ java -jar bitcurator-redact-pdf-all-1.0.jar
