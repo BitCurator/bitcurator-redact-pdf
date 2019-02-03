@@ -34,7 +34,7 @@ programs you have just installed to the default library path.
     ```
     $ java -version
     ```
-1. Make sure you're in the directory noted in step 7 above (the following command assumes you cloned the repositories into your home directory; modify as required:
+1. Make sure you're in the directory noted in step 7 above (the following command assumes you cloned the repository into your home directory):
     ```
     $ cd ~/bitcurator-redact-pdf/build/libs
     ```
