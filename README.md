@@ -46,7 +46,7 @@ programs you have just installed to the default library path.
     ```
     $ java -jar -mx3g -jar bitcurator-redact-pdf-all-1.0.jar
     ```
-1. If you open the Properties dialog for the jar file in the file browser, you can set the executable flag, found under the Permissions tab. This will allow you to run the software in the future by double-clicking on the jar file. When you open a file browser, you will be shown your home directory. Assuming you downlaoded the **bitcurator-redact-pdf** repository into your home directory, you should see a **bitcurator-redact-pdf** folder. Double-click on it, then double click on **build**, then double-click on **libs**. Right-click on the jar file, select **Properties** from the context menu, and then click the **Permissions** tab. Check the box labeled **"Allow executing file as a program."
+1. If you open the Properties dialog for the jar file in the file browser, you can set the executable flag, found under the Permissions tab. This will allow you to run the software in the future by double-clicking on the jar file. When you open a file browser, you will be shown your home directory. Assuming you downlaoded the **bitcurator-redact-pdf** repository into your home directory, you should see a **bitcurator-redact-pdf** folder. Double-click on it, then double click on **build**, then double-click on **libs**. Right-click on the jar file, select **Properties** from the context menu, and then click the **Permissions** tab. Check the box labeled **"Allow executing file as a program."**
 
 # Quick Start Guide
 
