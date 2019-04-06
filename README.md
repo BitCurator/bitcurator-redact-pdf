@@ -129,40 +129,10 @@ We are going to proceed step-by-step through the redaction of a sample file, `sa
 
 1. The dialog windows closes. The program has saved your redacted PDF file in the output folder.
 
+## License(s)
 
-# Implementation Notes
+The BitCurator logo, BitCurator project documentation, and other non-software products of the BitCurator team are subject to the the Creative Commons Attribution 4.0 Generic license (CC By 4.0).
 
-## Punch List
-* DONE RedactionDialog doesn't render right-side table immediately (until window resize)
-* DONE Text pattern redact locations override entity locations somehow in preview dialog.
-* DONE Require user choice for "Ask" instances before Redact..
-* DONE Bulk Extractor feature import (see email.txt, # headers, entity in 2nd TDF column)
-* DONE Make menu items consistent and add pattern save/load actions
-* DONE Implement entity type checkboxes (in main menu)
-* DONE Uniform color scheme for policy/action in tables and preview
-* DONE Move the repository to https://github.com/bitcurator/bitcurator-redact-pdf per our discussion at the beginning of the contract. You should have administrative privileges on that group. Let me know if you run into any issues with this.
-* DONE Build documentation for Ubuntu 18.04LTS (e.g. clean build in BitCurator 2.0.6 with default OpenJDK 11) in the README or INSTALL.
-* DONE Add a directory with a few test PDFs and relevant sample runs described (briefly) in documentation.
-* NOPE Make policy while reviewing a document
+Unless otherwise indicated, software items in this repository are distributed under the terms of the GNU Lesser General Public License, Version 3. See the text file "COPYING" for further details about the terms of this license.
 
-## Entity Extraction
-* FIXED Need progress indicator for PatternFindingWorker created on redact(), E.G. Belgium finding aid
-* DONE We can call Spacy with batches of PDF files.
-* DONE We can use Stanford NLP batches as well (w/in Java)
-* DONE Show progress through the file list.
-* NOPE Perhaps run Spacy on individual files, so that we can show progress in file list.
-
-## Redaction
-* DONE Redact a chosen single file now.
-* Start a the top of the list, i.e. "Begin Redaction".
-* When prompted with a pattern match:
-  (1) Redact
-  (2) Ignore
- * Option to "Remember this choice for pattern X".
-
-## Possible Features
-* DONE Display other coordinates (which files) and stats (# instances) for extracted entities.
-* User editable extracted entities, e.g. to remove extraneous words/tokens.
-* DONE At least one example textual context for the extracted entity, perhaps all..
-* DONE Keep making/re-making redaction decisions until you actually redact that PDF.
-* DONE Redact the same PDF again to overwrite the previously redacted file.
+In addition to software produced by the BitCurator team, BitCurator packages and modifies open source software produced by other developers. Licenses and attributions are retained here where applicable.
