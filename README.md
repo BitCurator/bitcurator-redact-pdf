@@ -131,7 +131,7 @@ We are going to proceed step-by-step through the redaction of a sample file, `sa
 
 ## Acknowledgements
 
-Greg Jansen developed the BitCurator Access Redaction Tools under contract for the BitCurator Access project.
+Greg Jansen developed the BitCurator Redact PDF under contract for the BitCurator NLP project.
 
 ## License(s)
 
