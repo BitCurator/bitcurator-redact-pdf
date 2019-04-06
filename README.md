@@ -1,8 +1,8 @@
 # Overview
 
-The BitCurator PDF Redactor is a desktop application designed to help you effectively remove personally identifiable information from PDF files. It can work on PDFs files individually or many at once. This tool uses natural language parsing to detect named entities, such as people, places, and organizations, in the text of PDF files. It can also detect text patterns that you supply as regular expressions. Original PDFs are left as is, with the newly redacted copies placed in an output folder within the current directory.
+BitCurator Redact PDF is a desktop application designed to help you effectively remove personally identifiable information from PDF files. It can work on PDFs files individually or many at once. This tool uses natural language parsing to detect named entities, such as people, places, and organizations, in the text of PDF files. It can also detect text patterns that you supply as regular expressions. Original PDFs are left as is, with the newly redacted copies placed in an output folder within the current directory.
 
-NOTE: The BitCurator Redactor redacts PDF text areas completely. It replaces the text characters with empty space and covers the relevant page area with a black rectangle, after which the original text is not recoverable. The program does not necessarily detect or redact PDF file properties that are not shown visually, i.e. authorship information that is captured by PDF producing software.
+NOTE: BitCurator Redact PDF redacts PDF text areas completely. It replaces the text characters with empty space and covers the relevant page area with a black rectangle, after which the original text is not recoverable. The program does not necessarily detect or redact PDF file properties that are not shown visually, i.e. authorship information that is captured by PDF producing software.
 
 # Building the Software in BitCurator
 
