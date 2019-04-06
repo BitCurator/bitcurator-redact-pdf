@@ -129,6 +129,10 @@ We are going to proceed step-by-step through the redaction of a sample file, `sa
 
 1. The dialog windows closes. The program has saved your redacted PDF file in the output folder.
 
+## Acknowledgements
+
+Greg Jansen developed the BitCurator Access Redaction Tools under contract for the BitCurator Access project.
+
 ## License(s)
 
 The BitCurator logo, BitCurator project documentation, and other non-software products of the BitCurator team are subject to the the Creative Commons Attribution 4.0 Generic license (CC By 4.0).
