@@ -1,3 +1,10 @@
+![Logo](https://github.com/BitCurator/bitcurator.github.io/blob/master/logos/BitCurator-Basic-400px.png)
+
+# bitcurator-redact-pdf
+
+[![GitHub issues](https://img.shields.io/github/issues/bitcurator/bitcurator-redact-pdf.svg)](https://github.com/bitcurator/bitcurator-redact-pdf/issues)
+[![GitHub forks](https://img.shields.io/github/forks/bitcurator/bitcurator-redact-pdf.svg)](https://github.com/bitcurator/bitcurator-redact-pdf/network)
+
 # Overview
 
 BitCurator Redact PDF is a desktop application designed to help you effectively remove personally identifiable information from PDF files. It can work on PDFs files individually or many at once. This tool uses natural language parsing to detect named entities, such as people, places, and organizations, in the text of PDF files. It can also detect text patterns that you supply as regular expressions. Original PDFs are left as is, with the newly redacted copies placed in an output folder within the current directory.
