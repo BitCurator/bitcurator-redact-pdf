@@ -4,8 +4,11 @@
 
 [![GitHub issues](https://img.shields.io/github/issues/bitcurator/bitcurator-redact-pdf.svg)](https://github.com/bitcurator/bitcurator-redact-pdf/issues)
 [![GitHub forks](https://img.shields.io/github/forks/bitcurator/bitcurator-redact-pdf.svg)](https://github.com/bitcurator/bitcurator-redact-pdf/network)
-[![Build Status](https://travis-ci.org/BitCurator/bitcurator-redact-pdf.svg?branch=master)](https://travis-ci.org/BitCurator/bitcurator-redact-pdf)
 [![Twitter Follow](https://img.shields.io/twitter/follow/bitcurator.svg?style=social&label=Follow)](https://twitter.com/bitcurator)
+
+# END-OF-LIFE (EOL) NOTICE 
+
+This research software has reached end-of-life. The code in this repository is no longer actively maintained or supported.
 
 # Overview
 
